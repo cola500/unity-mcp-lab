@@ -2,6 +2,12 @@
 
 A minimal experiment verifying that **Claude Code** can drive the **Unity Editor** through the **Model Context Protocol (MCP)**.
 
+## Vision
+
+A tiny VR social prototype: two people meet in VR, sit by a campfire, and talk. Nothing more.
+
+The current repo is the scaffolding under that goal — first proving the AI ↔ Editor link works, then building the campfire space, and only later adding VR rig and networking. Each slice is small and standalone, so we can stop or change direction at any point.
+
 ## Purpose
 
 Prove that an AI assistant can:
@@ -82,6 +88,19 @@ unity-mcp-lab/
     ├── Packages/manifest.json
     └── ProjectSettings/
 ```
+
+## Next slices
+
+Smallest sensible steps toward the vision, in rough order. Each is its own commit/PR.
+
+1. **Flame flicker** — tiny `MonoBehaviour` that perturbs `FireLight` intensity over time (sine + noise). Adds life without networking or VR.
+2. **Ambient sound** — a single looping crackle `AudioSource` on the flame. Makes the room feel inhabited.
+3. **Night skybox + softer ambient light** — push the mood from "neutral 3D scene" to "evening by a fire".
+4. **Look-at gaze on PlayerSlot capsules** — make the placeholder avatars subtly orient toward the fire or each other.
+5. **Switch to URP** (if not already) and add a soft bloom on the flame — visual warmth.
+6. **XR Interaction Toolkit + a single VR rig at PlayerSlot_A** — first time we put a headset on. Still single-player.
+7. **Netcode for GameObjects, host/client over LAN** — two builds, both spawn into a slot, see each other's head. No voice yet.
+8. **Voice chat** (Unity Vivox or a peer-to-peer alternative). At this point the original vision is reached.
 
 ## Out of scope
 
