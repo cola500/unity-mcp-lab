@@ -1,148 +1,135 @@
 # unity-mcp-lab
 
-A minimal experiment verifying that **Claude Code** can drive the **Unity Editor** through the **Model Context Protocol (MCP)**.
+A cozy social VR experiment for Meta Quest 3, built entirely as thin vertical slices through Claude Code driving the Unity Editor over MCP.
 
 ## Vision
 
-A tiny VR social prototype: two people meet in VR, sit by a campfire, and talk. Nothing more.
+Two people meet in VR, sit by a low-poly campfire, and talk. Nothing more.
 
-The current repo is the scaffolding under that goal — first proving the AI ↔ Editor link works, then building the campfire space, and only later adding VR rig and networking. Each slice is small and standalone, so we can stop or change direction at any point.
+The repo starts as the AI ↔ Editor link and grows one verifiable slice at a time toward that goal — Quest 3 standalone, seated, low-poly, cozy. See [docs/vision.md](docs/vision.md) for the longer version.
 
-## Purpose
+## Current MVP
 
-Prove that an AI assistant can:
+`CampfireRoom` scene running standalone on Quest 3:
 
-1. Read the active scene
-2. Create a GameObject
-3. Modify its transform
-4. Save the scene
+- Night-time campfire room (ground, logs, flickering flame, point-light glow, dark navy ambient).
+- Seated player rig at `PlayerSlot_A` facing the fire, with explicit camera offset for sitting eye height.
+- Head tracking via HMD, hand placeholders via tracked Quest controllers, trigger feedback.
+- A second placeholder slot (`PlayerSlot_B`) that subtly looks at the fire.
+- Minimal LAN multiplayer spike that synchronises a remote player's head pose between two Quests (or Quest + Editor).
 
-…without writing any C# code or clicking in the Unity Editor.
+No voice, no hands-on-network, no locomotion, no interactions. Every piece is a separate slice.
 
-## Stack
+## Verified capabilities
+
+- [x] Unity Editor controlled by Claude Code via [`CoderGamester/mcp-unity`](https://github.com/CoderGamester/mcp-unity)
+- [x] Scene authoring through MCP (primitives, materials, lighting, scripts, components, prefabs, build settings)
+- [x] Quest 3 standalone build via Oculus XR Plugin
+- [x] HMD pose tracking with a hand-written `XRHeadTracker` (no XRI/Input System)
+- [x] Hand/controller presence as primitive placeholders tracking `XRNode.LeftHand` / `RightHand`
+- [x] Trigger input feedback (subtle scale pulse on the hand placeholder)
+- [x] Netcode for GameObjects on UnityTransport, owner-authoritative head pose sync over LAN
+
+## Architecture overview
+
+```
+Root
+├── World                       (static; no script moves it)
+│   ├── Ground, Log_1, Log_2, Flame, FireLight (+ FireLightFlicker)
+│   ├── Atmosphere (NightAtmosphere — RenderSettings ambient + skybox)
+│   ├── Seat_A, Seat_B, PlayerSlot_A (disabled), PlayerSlot_B (+ FaceTarget)
+│   ├── EyeHeightMarker_A, Directional Light, Main Camera (disabled)
+│
+├── VRRig (1.6, 0, 0, rot Y=270°)
+│   ├── XRTrackingOriginSetter (Device + recenter on start)
+│   ├── XRDebugLogger
+│   └── CameraOffset (local 0, 1.2, 0)          ← seated eye height
+│       ├── VRCamera        (XRHeadTracker node=CenterEye, MainCamera tag)
+│       ├── LeftHandAnchor  (XRHeadTracker node=LeftHand   + XRControllerInputFeedback)
+│       │   └── LeftHandMesh
+│       └── RightHandAnchor (XRHeadTracker node=RightHand  + XRControllerInputFeedback)
+│           └── RightHandMesh
+│
+├── NetworkManager  (Unity.Netcode.NetworkManager + UnityTransport)
+└── NetworkBootstrap (host/client startup, OnGUI overlay)
+```
+
+Networking model: each peer spawns a `PlayerHead` prefab on connect. Owner-authoritative `ClientNetworkTransform` syncs head pose. Owner hides its own visual (we render through `VRCamera`).
+
+## Tech stack
 
 | Component | Version |
 |---|---|
 | Unity Editor | `6000.4.7f1` (Unity 6.4) |
+| Render pipeline | Built-in |
+| XR | `com.unity.xr.management 4.5.0` + `com.unity.xr.oculus 4.5.0` |
+| Networking | `com.unity.netcode.gameobjects 2.1.1` + `com.unity.transport 2.4.0` |
 | MCP bridge | [`CoderGamester/mcp-unity`](https://github.com/CoderGamester/mcp-unity) |
-| Node.js | ≥ 18 (verified on v26) |
-| npm | ≥ 9 (verified on 11.12) |
-| Host | macOS Apple Silicon (Rosetta 2 required) |
+| Node.js / npm | ≥ 18 / ≥ 9 (verified on 26 / 11.12) |
+| Host machine | macOS Apple Silicon (Rosetta 2 required) |
+| Target device | Meta Quest 3 standalone |
 
-## Result
+## Quest 3 setup
 
-Verified end-to-end: `AI_Cube` at position `(0,0,0)` with scale `(2,2,2)` was created and persisted to `UnityProject/Assets/Scenes/Main.unity` via MCP tool calls only.
+**One-time:**
 
-## Setup on a fresh machine
+1. Unity Hub → Installs → Add Modules → **Android Build Support** with **OpenJDK** and **Android SDK & NDK Tools**.
+2. `sudo softwareupdate --install-rosetta --agree-to-license` (Unity's toolchain needs it even on arm64).
+3. Quest: Developer Mode on via the Meta Quest mobile app; allow USB debugging on first connect.
+4. Open the project in Unity, run **Tools → Quest Setup → Configure Project for Quest 3** once.
 
-1. **Install Unity 6** via Unity Hub. Open Hub → Installs → Install Editor → pick any `6000.x` LTS.
-2. **Install Rosetta 2** (required even on Apple Silicon for Unity's toolchain):
-   ```
-   sudo softwareupdate --install-rosetta --agree-to-license
-   ```
-3. **Clone and resolve the Unity package**:
-   ```
-   git clone <this-repo> unity-mcp-lab
-   cd unity-mcp-lab
-   "/Applications/Unity/Hub/Editor/6000.4.7f1/Unity.app/Contents/MacOS/Unity" \
-     -batchmode -quit -projectPath "$PWD/UnityProject" -logFile -
-   ```
-   This populates `UnityProject/Library/PackageCache/com.gamelovers.mcp-unity@<HASH>/`.
-4. **Build the Node server**:
-   ```
-   cd UnityProject/Library/PackageCache/com.gamelovers.mcp-unity@*/Server~
-   npm install
-   npm run build
-   ```
-5. **Configure MCP for Claude Code**:
-   ```
-   cp .mcp.example.json .mcp.json
-   ```
-   Edit `.mcp.json` and replace `ABSOLUTE_PATH_TO_REPO` and `PACKAGE_HASH` with the real values (find the hash by listing `UnityProject/Library/PackageCache/`).
-6. **Open the project in Unity Editor** (Unity Hub → Open → select `UnityProject/`). Leave the Editor running.
-7. **In Unity**: `Tools → MCP Unity → Server Window → Start Server`. Keep the window open.
-8. **Restart Claude Code** in the repo root. Approve the `.mcp.json` server when prompted.
-9. Verify `mcp__mcp-unity__*` tools are loaded by asking Claude to call `get_scene_info`.
-
-## Known issues / friction discovered
-
-- **Rosetta 2 is required** even though the Unity binary is arm64-native. Not documented prominently in mcp-unity's README.
-- **`.mcp.json` is brittle**. It embeds:
-  - an absolute path to the clone location,
-  - a git-commit-prefix hash that changes whenever the `mcp-unity` package is upgraded.
-  That is why `.mcp.json` is gitignored and `.mcp.example.json` ships as a template. A more durable setup would move the Node server to a stable in-repo location and reference it relatively, but that is out of scope for this first slice.
-- **`Library/PackageCache/` is gitignored** (per Unity convention), so the MCP server path does not exist until Unity has opened the project at least once. Step 3 in setup handles this.
-- **`get_gameobject` returns large payloads** (~250 lines per object) including circular references and `Unable to serialize` placeholders. Functional but noisy.
-- **Default new scene is unsaved**, so the first save needs `save_scene` with `saveAs: true` and an explicit `scenePath`. Subsequent saves work without it.
-- **MCP servers are only loaded at Claude Code session start**. You must restart the session after editing `.mcp.json` or starting the Unity-side server.
-
-## Repository layout
+**Each iteration:**
 
 ```
-unity-mcp-lab/
-├── .gitignore
-├── .mcp.example.json     # template — copy to .mcp.json and edit
-├── README.md
-└── UnityProject/         # the Unity 6 project; minimal 3D template
-    ├── Assets/Scenes/Main.unity
-    ├── Packages/manifest.json
-    └── ProjectSettings/
+adb=/Applications/Unity/Hub/Editor/6000.4.7f1/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb
+$adb devices                          # expect your Quest serial
+# In Unity:
+# File → Build Settings → Build And Run   (or Cmd+B)
 ```
 
-## Building for Meta Quest 3
+The APK installs and launches automatically. Falling back to flat-screen Editor view: enable `Main Camera` and disable `VRRig`.
 
-Hardware: Meta Quest 3, USB-C cable, Mac with Android Build Support installed in Unity Hub.
+## LAN multiplayer testing
 
-**One-time setup (already done in this repo, listed here for reproducibility):**
+Scene has `NetworkManager` (NGO + UnityTransport) and `NetworkBootstrap`. `serverAddress` defaults to `127.0.0.1` — edit it in the scene before building if the host runs on a different machine.
 
-- Unity Hub → Installs → Add Modules → **Android Build Support** with **OpenJDK** and **Android SDK & NDK Tools**.
-- Quest: Developer Mode on (via Meta Quest mobile app), USB debugging allowed.
-- Project menu **Tools → Quest Setup → Configure Project for Quest 3** ran once — switches to Android target, IL2CPP, ARM64, Linear color space, Vulkan, identifier `com.unitymcplab.campfireroom`, and assigns the Oculus XR loader. Re-runnable.
+| Action | Editor (Mac) | Quest |
+|---|---|---|
+| Start as host | press **H** | right controller **A** |
+| Start as client | press **C** | right controller **B** |
+| Stop | press **X** | re-launch app |
 
-**Build & deploy (each iteration):**
+The OnGUI overlay shows the local IPv4 addresses. To pair two Quests: read the host's IP off its overlay, set that as `serverAddress` on the second build, rebuild, deploy.
 
-1. Connect Quest 3 via USB-C and confirm `adb devices` shows it:
-   ```
-   /Applications/Unity/Hub/Editor/6000.4.7f1/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb devices
-   ```
-2. In Unity: **File → Build Settings → Build And Run** (or `Cmd+B`). Pick a build folder (e.g. `Builds/quest/CampfireRoom.apk`). The APK installs and launches on the headset automatically.
-3. Put the headset on. The app opens to the campfire scene with you seated at **PlayerSlot_A** facing the fire. **PlayerSlot_B** remains as the empty placeholder for the remote friend.
+When it works: a small sphere appears at the remote player's head and rotates as they move. Hands are not synced yet. No voice.
 
-**Manual install of an existing APK:**
-```
-adb install -r Builds/quest/CampfireRoom.apk
-adb shell am start -n com.unitymcplab.campfireroom/com.unity3d.player.UnityPlayerActivity
-```
+## MCP workflow
 
-**Falling back to non-VR Editor view:** the original `Main Camera` is still in the scene but disabled. Toggle it on (and disable `VRRig`) to use the previous flat-screen view.
+The whole project was authored through Claude Code calling `mcp__mcp-unity__*` tools against a running Unity Editor. Notable patterns we settled on:
 
-**Testing controller trigger feedback:** with the app running on Quest, squeeze either index trigger. The corresponding hand placeholder should swell ~15% smoothly while held and ease back to normal scale on release. Subtle by design — confirms input is wired without committing to any interaction semantics yet.
+- **Re-runnable Editor menus** (`Tools → Quest Setup → ...`, `Tools → Network Setup → ...`) configure non-trivial setup (Player Settings, XR loader, NetworkManager bindings) declaratively. Easier than poking individual fields through MCP and reproducible from scratch.
+- **`Assets/Refresh` is required** after writing a new `.cs` via MCP — `recompile_scripts` alone does not surface the new file to the asset database.
+- **MCP cannot bind `UnityEngine.Object` references** through JSON `componentData`. Workarounds: auto-find by name in `OnEnable` (used in `FaceTarget`, `NetworkHead`), or wire references inside an Editor menu (`NetworkSetup`).
+- **Verify with `get_console_logs`** after each compile-affecting change.
+- **Restart Claude Code** after editing `.mcp.json` or starting the Unity-side MCP server.
 
-**Testing the minimal LAN multiplayer spike:** the scene contains a `NetworkManager` (Netcode for GameObjects + UnityTransport) and a `NetworkBootstrap` GameObject. `NetworkBootstrap.serverAddress` defaults to `127.0.0.1` — edit it in the scene before building if the host runs on a different machine.
+## Known issues / limitations
 
-- In the Editor (Mac), press **H** to start as host, **C** to start as client, **X** to stop.
-- On Quest, press the **A** button on the right controller to start as host, **B** to start as client.
-- The on-screen overlay shows the local IPv4 addresses — read the host's IP off its overlay, set that as `serverAddress` on the client device's build, then rebuild that client.
-
-What you should see when it works: a small sphere appears in the host's world at the client's head position and rotates as the client moves. The host's own head sphere is hidden from the host (you see through `VRCamera`). The remote head sphere is owner-authoritative via `ClientNetworkTransform`. LAN-only, no relay, no voice.
+- `.mcp.json` is gitignored. It embeds an absolute path and a `Library/PackageCache/com.gamelovers.mcp-unity@<HASH>/` segment; the hash changes on package upgrade. `.mcp.example.json` ships as a template.
+- Hand placeholders sit on the controller grip tracking point, not the palm — they feel slightly offset.
+- `serverAddress` is baked into the scene at build time. No runtime IP entry, no LAN discovery.
+- No graceful Stop on Quest builds — re-launch the app to disconnect.
+- `PlayerSlot_B` and a remote `PlayerHead` can co-exist visually; not yet de-duplicated.
+- Floor tracking origin alone was not enough on Quest 3; we use Device origin + an explicit `CameraOffset y=1.2`. See [docs/retro-log.md](docs/retro-log.md).
 
 ## Next slices
 
-Smallest sensible steps toward the vision, in rough order. Each is its own commit/PR.
+In rough order, each tiny enough to ship in one commit. Full list in [docs/roadmap.md](docs/roadmap.md):
 
-1. **Flame flicker** — tiny `MonoBehaviour` that perturbs `FireLight` intensity over time (sine + noise). Adds life without networking or VR.
-2. **Ambient sound** — a single looping crackle `AudioSource` on the flame. Makes the room feel inhabited.
-3. **Night skybox + softer ambient light** — push the mood from "neutral 3D scene" to "evening by a fire".
-4. **Look-at gaze on PlayerSlot capsules** — make the placeholder avatars subtly orient toward the fire or each other.
-5. **Switch to URP** (if not already) and add a soft bloom on the flame — visual warmth.
-6. ~~**XR Interaction Toolkit + a single VR rig at PlayerSlot_A**~~ — done with a minimal Oculus XR rig instead (no XRI, no Input System switch). See "Building for Meta Quest 3" above.
-7. **Hand presence / controller models** — show the user's controllers as low-poly hand placeholders.
-8. **Netcode for GameObjects, host/client over LAN** — two builds, both spawn into a slot, see each other's head. No voice yet.
-9. **Voice chat** (Unity Vivox or a peer-to-peer alternative). At this point the original vision is reached.
-
-## Out of scope
-
-No gameplay, no rendering pipeline changes, no polish. The hypothesis was MCP-chain wiring only, and it is confirmed.
+1. Place the first remote `PlayerHead` at `PlayerSlot_B`'s position and hide the static placeholder when a remote peer connects.
+2. Sync the hand anchors over the network too (same pattern as the head).
+3. Voice chat (Vivox or peer-to-peer alternative).
+4. Cozy polish — bloom on the flame, ambient crackle audio, dimmer global ambient.
 
 ## License
 
