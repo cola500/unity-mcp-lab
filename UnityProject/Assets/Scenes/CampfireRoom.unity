@@ -163,6 +163,7 @@ GameObject:
   m_Component:
   - component: {fileID: 45024436}
   - component: {fileID: 45024437}
+  - component: {fileID: 45024438}
   m_Layer: 0
   m_Name: LeftHandAnchor
   m_TagString: Untagged
@@ -199,6 +200,23 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::XRHeadTracker
   node: 4
+--- !u!114 &45024438
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 45024435}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 88fecfedc3d32404d917cdd3a28d3cb0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::XRControllerInputFeedback
+  node: 4
+  visualTarget: {fileID: 0}
+  pressedScaleMultiplier: 1.15
+  smoothing: 12
+  triggerThreshold: 0.3
 --- !u!1 &214660185
 GameObject:
   m_ObjectHideFlags: 0
@@ -827,6 +845,7 @@ GameObject:
   m_Component:
   - component: {fileID: 762035064}
   - component: {fileID: 762035065}
+  - component: {fileID: 762035066}
   m_Layer: 0
   m_Name: RightHandAnchor
   m_TagString: Untagged
@@ -863,6 +882,23 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::XRHeadTracker
   node: 5
+--- !u!114 &762035066
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 762035063}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 88fecfedc3d32404d917cdd3a28d3cb0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::XRControllerInputFeedback
+  node: 5
+  visualTarget: {fileID: 0}
+  pressedScaleMultiplier: 1.15
+  smoothing: 12
+  triggerThreshold: 0.3
 --- !u!1 &930746767
 GameObject:
   m_ObjectHideFlags: 0

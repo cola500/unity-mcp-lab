@@ -116,6 +116,8 @@ adb shell am start -n com.unitymcplab.campfireroom/com.unity3d.player.UnityPlaye
 
 **Falling back to non-VR Editor view:** the original `Main Camera` is still in the scene but disabled. Toggle it on (and disable `VRRig`) to use the previous flat-screen view.
 
+**Testing controller trigger feedback:** with the app running on Quest, squeeze either index trigger. The corresponding hand placeholder should swell ~15% smoothly while held and ease back to normal scale on release. Subtle by design — confirms input is wired without committing to any interaction semantics yet.
+
 ## Next slices
 
 Smallest sensible steps toward the vision, in rough order. Each is its own commit/PR.
