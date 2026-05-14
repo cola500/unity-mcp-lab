@@ -52,7 +52,10 @@ public static class NetworkSetup
 
         var transport = nm.GetComponent<UnityTransport>();
         if (transport != null)
+        {
+            nm.NetworkConfig.NetworkTransport = transport;
             transport.SetConnectionData("127.0.0.1", 7777, "0.0.0.0");
+        }
 
         EditorUtility.SetDirty(nm);
         EditorSceneManager.SaveOpenScenes();
