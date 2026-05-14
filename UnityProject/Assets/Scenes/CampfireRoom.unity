@@ -131,6 +131,7 @@ GameObject:
   - component: {fileID: 214660188}
   - component: {fileID: 214660187}
   - component: {fileID: 214660186}
+  - component: {fileID: 214660190}
   m_Layer: 0
   m_Name: PlayerSlot_A
   m_TagString: Untagged
@@ -233,6 +234,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &214660190
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 214660185}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0059d7a3325274c6abe9f8f220d55d82, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaceTarget
+  target: {fileID: 957741264}
+  yAxisOnly: 1
 --- !u!1 &247844671
 GameObject:
   m_ObjectHideFlags: 0
@@ -516,6 +531,7 @@ GameObject:
   - component: {fileID: 948261748}
   - component: {fileID: 948261747}
   - component: {fileID: 948261746}
+  - component: {fileID: 948261750}
   m_Layer: 0
   m_Name: PlayerSlot_B
   m_TagString: Untagged
@@ -618,6 +634,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &948261750
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 948261745}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0059d7a3325274c6abe9f8f220d55d82, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaceTarget
+  target: {fileID: 957741264}
+  yAxisOnly: 1
 --- !u!1 &957741260
 GameObject:
   m_ObjectHideFlags: 0
