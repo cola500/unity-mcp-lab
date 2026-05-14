@@ -118,6 +118,14 @@ adb shell am start -n com.unitymcplab.campfireroom/com.unity3d.player.UnityPlaye
 
 **Testing controller trigger feedback:** with the app running on Quest, squeeze either index trigger. The corresponding hand placeholder should swell ~15% smoothly while held and ease back to normal scale on release. Subtle by design — confirms input is wired without committing to any interaction semantics yet.
 
+**Testing the minimal LAN multiplayer spike:** the scene contains a `NetworkManager` (Netcode for GameObjects + UnityTransport) and a `NetworkBootstrap` GameObject. `NetworkBootstrap.serverAddress` defaults to `127.0.0.1` — edit it in the scene before building if the host runs on a different machine.
+
+- In the Editor (Mac), press **H** to start as host, **C** to start as client, **X** to stop.
+- On Quest, press the **A** button on the right controller to start as host, **B** to start as client.
+- The on-screen overlay shows the local IPv4 addresses — read the host's IP off its overlay, set that as `serverAddress` on the client device's build, then rebuild that client.
+
+What you should see when it works: a small sphere appears in the host's world at the client's head position and rotates as the client moves. The host's own head sphere is hidden from the host (you see through `VRCamera`). The remote head sphere is owner-authoritative via `ClientNetworkTransform`. LAN-only, no relay, no voice.
+
 ## Next slices
 
 Smallest sensible steps toward the vision, in rough order. Each is its own commit/PR.

@@ -2,6 +2,8 @@
   "dependencies": {
     "com.gamelovers.mcp-unity": "https://github.com/CoderGamester/mcp-unity.git",
     "com.unity.multiplayer.center": "1.0.1",
+    "com.unity.netcode.gameobjects": "2.1.1",
+    "com.unity.transport": "2.4.0",
     "com.unity.xr.management": "4.5.0",
     "com.unity.xr.oculus": "4.5.0",
     "com.unity.modules.accessibility": "1.0.0",
