@@ -162,7 +162,7 @@ public static class NetworkSetup
         audio.loop = true;
         audio.playOnAwake = true;
         audio.spatialBlend = 1f;
-        audio.volume = 0.4f;
+        audio.volume = 0.3f;
         audio.rolloffMode = AudioRolloffMode.Linear;
         audio.minDistance = 0.5f;
         audio.maxDistance = 8f;
