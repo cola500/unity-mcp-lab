@@ -67,10 +67,9 @@ public class TutorialOverlay : MonoBehaviour
                     _net.CodeDisplay + "\n" +
                     "\n" +
                     (string.IsNullOrEmpty(notification) ? "" : notification + "\n\n") +
-                    "A  next letter\n" +
-                    "X  prev letter\n" +
-                    (onLast ? "B  join\n" : "B  next slot\n") +
-                    "Y  back";
+                    "stick  change letter\n" +
+                    (onLast ? "B      join\n" : "B      next slot\n") +
+                    "Y      back";
                 break;
             }
 

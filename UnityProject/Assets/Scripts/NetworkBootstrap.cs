@@ -58,6 +58,9 @@ public class NetworkBootstrap : MonoBehaviour
     private const string RelayCodeProperty = "rc";
     private const float AutoRepeatDelay = 0.45f;
     private const float AutoRepeatInterval = 0.18f;
+    private const float StickDeadzone = 0.5f;
+    private const float StickRepeatDelay = 0.35f;
+    private const float StickRepeatInterval = 0.12f;
 
     private string _joinCodeInput = "";
     private string _state = "Idle";
@@ -75,6 +78,10 @@ public class NetworkBootstrap : MonoBehaviour
     private int _slotIndex = 0;
 
     private float _aHeldTime, _xHeldTime, _aNextRepeat, _xNextRepeat;
+
+    private bool _prevStickPos, _prevStickNeg;
+    private float _stickPosHeld, _stickNegHeld;
+    private float _stickPosNextRepeat, _stickNegNextRepeat;
 
     private GUIStyle _codeStyle;
     private GUIStyle _labelStyle;
@@ -135,8 +142,61 @@ public class NetworkBootstrap : MonoBehaviour
         PollController(XRNode.RightHand, ref _prevRPrimary, ref _prevRSecondary, OnRightPrimary, OnRightSecondary);
 
         if (_inputState == InputState.EditingCode)
+        {
             UpdateAutoRepeat();
-        else { _aHeldTime = _xHeldTime = _aNextRepeat = _xNextRepeat = 0f; }
+            UpdateStickCycle();
+        }
+        else
+        {
+            _aHeldTime = _xHeldTime = _aNextRepeat = _xNextRepeat = 0f;
+            _stickPosHeld = _stickNegHeld = _stickPosNextRepeat = _stickNegNextRepeat = 0f;
+            _prevStickPos = _prevStickNeg = false;
+        }
+    }
+
+    void UpdateStickCycle()
+    {
+        var rDev = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+        Vector2 stick = Vector2.zero;
+        if (rDev.isValid) rDev.TryGetFeatureValue(CommonUsages.primary2DAxis, out stick);
+
+        bool pos = false, neg = false;
+        if (stick.sqrMagnitude >= StickDeadzone * StickDeadzone)
+        {
+            float val = Mathf.Abs(stick.x) >= Mathf.Abs(stick.y) ? stick.x : stick.y;
+            pos = val > 0f;
+            neg = val < 0f;
+        }
+
+        TickStick(pos, ref _prevStickPos, ref _stickPosHeld, ref _stickPosNextRepeat, +1);
+        TickStick(neg, ref _prevStickNeg, ref _stickNegHeld, ref _stickNegNextRepeat, -1);
+    }
+
+    void TickStick(bool active, ref bool prev, ref float heldTime, ref float nextRepeat, int delta)
+    {
+        if (active && !prev)
+        {
+            _lastButton = "RightHand stick";
+            _lastAction = delta > 0 ? "Stick: next letter" : "Stick: prev letter";
+            CycleSlot(delta);
+            heldTime = 0f;
+            nextRepeat = 0f;
+        }
+        if (active)
+        {
+            heldTime += Time.deltaTime;
+            if (heldTime > StickRepeatDelay && heldTime - nextRepeat >= StickRepeatInterval)
+            {
+                CycleSlot(delta);
+                nextRepeat = heldTime;
+            }
+        }
+        else
+        {
+            heldTime = 0f;
+            nextRepeat = 0f;
+        }
+        prev = active;
     }
 
     void UpdateAutoRepeat()
