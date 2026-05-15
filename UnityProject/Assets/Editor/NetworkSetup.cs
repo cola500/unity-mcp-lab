@@ -130,4 +130,47 @@ public static class NetworkSetup
         Debug.Log($"[NetworkSetup] VoiceConnection wired: Recorder + SpeakerPrefab. " +
                   $"primaryRecorder set: {primaryRecorderProp != null}, speakerPrefab set: {speakerPrefabProp != null}");
     }
+
+    private const string CampfireCrackleClipPath = "Assets/audio/campfire_crackle.wav";
+
+    [MenuItem("Tools/Ambience Setup/Create FireCrackleAudio")]
+    public static void CreateFireCrackleAudio()
+    {
+        var flame = GameObject.Find("Flame");
+        if (flame == null) { Debug.LogError("[NetworkSetup] No Flame in scene"); return; }
+
+        var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(CampfireCrackleClipPath);
+        if (clip == null)
+        {
+            Debug.LogError($"[NetworkSetup] {CampfireCrackleClipPath} not found.");
+            return;
+        }
+
+        var existing = flame.transform.Find("FireCrackleAudio");
+        GameObject go;
+        if (existing != null) go = existing.gameObject;
+        else
+        {
+            go = new GameObject("FireCrackleAudio");
+            go.transform.SetParent(flame.transform, false);
+            go.transform.localPosition = Vector3.zero;
+        }
+
+        var audio = go.GetComponent<AudioSource>();
+        if (audio == null) audio = go.AddComponent<AudioSource>();
+        audio.clip = clip;
+        audio.loop = true;
+        audio.playOnAwake = true;
+        audio.spatialBlend = 1f;
+        audio.volume = 0.4f;
+        audio.rolloffMode = AudioRolloffMode.Linear;
+        audio.minDistance = 0.5f;
+        audio.maxDistance = 8f;
+        audio.dopplerLevel = 0f;
+
+        EditorUtility.SetDirty(audio);
+        EditorSceneManager.SaveOpenScenes();
+
+        Debug.Log("[NetworkSetup] FireCrackleAudio created/configured under Flame.");
+    }
 }
