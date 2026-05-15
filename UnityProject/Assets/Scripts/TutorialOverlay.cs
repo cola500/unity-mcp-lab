@@ -46,15 +46,16 @@ public class TutorialOverlay : MonoBehaviour
         }
         else if (_net != null && _net.IsEditingCode)
         {
-            bool onLast = _net.CodeSlot >= 5;
+            int lastSlot = _net.CodeLengthSlots - 1;
+            bool onLast = _net.CodeSlot >= lastSlot;
             text.text =
                 $"Mode: {mode}\n" +
                 "\n" +
-                "JOIN CODE\n" +
+                "JOIN CODE  (letters are A B C only)\n" +
                 _net.CodeDisplay + "\n" +
                 "\n" +
-                "A = NEXT LETTER\n" +
-                "X = PREVIOUS LETTER\n" +
+                "A = NEXT LETTER     (hold to auto-cycle)\n" +
+                "X = PREVIOUS LETTER (hold to auto-cycle)\n" +
                 (onLast ? "B = JOIN\n" : "B = NEXT SLOT\n") +
                 "Y = BACK\n" +
                 "\n" +

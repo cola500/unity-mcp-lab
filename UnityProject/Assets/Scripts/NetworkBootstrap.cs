@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
@@ -22,14 +23,20 @@ public class NetworkBootstrap : MonoBehaviour
     public bool IsEditingCode => _inputState == InputState.EditingCode;
     public string CodeDisplay => FormatCode();
     public int CodeSlot => _slotIndex;
+    public int CodeLengthSlots => CodeLength;
+    public string HostedAlias => _hostedAlias;
 
     private const string LanRoomName = "lan-campfire";
-    private const string CodeAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    private const int CodeLength = 6;
+    private const string CodeAlphabet = "ABC";
+    private const int CodeLength = 3;
+    private const string RelayCodeProperty = "rc";
+    private const float AutoRepeatDelay = 0.45f;
+    private const float AutoRepeatInterval = 0.18f;
 
     private string _joinCodeInput = "";
     private string _state = "Idle";
     private string _lastButton = "";
+    private string _hostedAlias = "";
     private bool _prevLPrimary, _prevLSecondary, _prevRPrimary, _prevRSecondary;
     private bool _loggedLeftInvalid, _loggedRightInvalid;
     private ServicesBootstrap _services;
@@ -37,8 +44,10 @@ public class NetworkBootstrap : MonoBehaviour
     private bool _busy;
 
     private InputState _inputState = InputState.Idle;
-    private readonly char[] _codeChars = { 'A', 'A', 'A', 'A', 'A', 'A' };
+    private readonly char[] _codeChars = { 'A', 'A', 'A' };
     private int _slotIndex = 0;
+
+    private float _aHeldTime, _xHeldTime, _aNextRepeat, _xNextRepeat;
 
     private GUIStyle _codeStyle;
     private GUIStyle _labelStyle;
@@ -97,6 +106,34 @@ public class NetworkBootstrap : MonoBehaviour
 
         PollController(XRNode.LeftHand,  ref _prevLPrimary, ref _prevLSecondary, OnLeftPrimary,  OnLeftSecondary);
         PollController(XRNode.RightHand, ref _prevRPrimary, ref _prevRSecondary, OnRightPrimary, OnRightSecondary);
+
+        if (_inputState == InputState.EditingCode)
+            UpdateAutoRepeat();
+        else { _aHeldTime = _xHeldTime = _aNextRepeat = _xNextRepeat = 0f; }
+    }
+
+    void UpdateAutoRepeat()
+    {
+        var rDev = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+        var lDev = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+        bool aHeld = false, xHeld = false;
+        if (rDev.isValid) rDev.TryGetFeatureValue(CommonUsages.primaryButton, out aHeld);
+        if (lDev.isValid) lDev.TryGetFeatureValue(CommonUsages.primaryButton, out xHeld);
+
+        TickRepeat(aHeld, ref _aHeldTime, ref _aNextRepeat, () => CycleSlot(+1));
+        TickRepeat(xHeld, ref _xHeldTime, ref _xNextRepeat, () => CycleSlot(-1));
+    }
+
+    void TickRepeat(bool held, ref float heldTime, ref float nextRepeat, System.Action action)
+    {
+        if (!held) { heldTime = 0; nextRepeat = 0; return; }
+        heldTime += Time.deltaTime;
+        if (heldTime <= AutoRepeatDelay) return;
+        if (heldTime - nextRepeat >= AutoRepeatInterval)
+        {
+            action();
+            nextRepeat = heldTime;
+        }
     }
 
     void OnLeftPrimary()
@@ -225,6 +262,14 @@ public class NetworkBootstrap : MonoBehaviour
         return sb.ToString();
     }
 
+    static string GenerateAlias()
+    {
+        var sb = new StringBuilder(CodeLength);
+        for (int i = 0; i < CodeLength; i++)
+            sb.Append(CodeAlphabet[Random.Range(0, CodeAlphabet.Length)]);
+        return sb.ToString();
+    }
+
     async void StartHost()
     {
         if (_busy) return;
@@ -237,21 +282,30 @@ public class NetworkBootstrap : MonoBehaviour
                 _voiceBootstrap?.JoinRoom(LanRoomName);
             }
             else _state = "LAN host failed";
+            return;
         }
-        else
+
+        if (_services == null || !_services.IsReady) { _state = "Signing in…"; return; }
+        _busy = true;
+        _state = "Creating campfire session…";
+
+        var realCode = await _services.HostRelayAsync();
+        if (string.IsNullOrEmpty(realCode))
         {
-            if (_services == null || !_services.IsReady) { _state = "Signing in…"; return; }
-            _busy = true;
-            _state = "Creating campfire session…";
-            var code = await _services.HostRelayAsync();
             _busy = false;
-            if (code != null)
-            {
-                _state = "Waiting for friend…";
-                _voiceBootstrap?.JoinRoom(code);
-            }
-            else _state = "Relay host failed";
+            _state = "Relay host failed";
+            return;
         }
+
+        _hostedAlias = GenerateAlias();
+        _voiceBootstrap?.JoinRoom(_hostedAlias);
+
+        bool roomReady = false;
+        if (_voiceBootstrap != null) roomReady = await _voiceBootstrap.WaitForRoomJoinedAsync(8f);
+        if (roomReady) _voiceBootstrap.SetRoomProperty(RelayCodeProperty, realCode);
+
+        _busy = false;
+        _state = roomReady ? "Waiting for friend…" : "Voice room failed";
     }
 
     async void StartClient()
@@ -266,18 +320,39 @@ public class NetworkBootstrap : MonoBehaviour
                 _voiceBootstrap?.JoinRoom(LanRoomName);
             }
             else _state = "LAN client failed";
+            return;
         }
-        else
+
+        if (_services == null || !_services.IsReady) { _state = "Signing in…"; return; }
+        if (string.IsNullOrEmpty(_joinCodeInput)) { _state = "No code entered"; return; }
+
+        var alias = _joinCodeInput;
+        _busy = true;
+        _state = $"Looking for {alias}…";
+
+        _voiceBootstrap?.JoinRoom(alias);
+
+        bool joined = false;
+        if (_voiceBootstrap != null) joined = await _voiceBootstrap.WaitForRoomJoinedAsync(8f);
+        if (!joined)
         {
-            if (_services == null || !_services.IsReady) { _state = "Signing in…"; return; }
-            if (string.IsNullOrEmpty(_joinCodeInput)) { _state = "No code entered"; return; }
-            _busy = true;
-            _state = $"Connecting to {_joinCodeInput}…";
-            bool ok = await _services.JoinRelayAsync(_joinCodeInput);
             _busy = false;
-            if (ok) _voiceBootstrap?.JoinRoom(_joinCodeInput);
-            else _state = "Could not join — check the code";
+            _state = "No campfire with that code";
+            return;
         }
+
+        var realCode = await _voiceBootstrap.WaitForRoomPropertyAsync(RelayCodeProperty, 5f);
+        if (string.IsNullOrEmpty(realCode))
+        {
+            _busy = false;
+            _state = "Host's code not found";
+            return;
+        }
+
+        _state = "Connecting…";
+        bool ok = await _services.JoinRelayAsync(realCode);
+        _busy = false;
+        if (!ok) _state = "Couldn't reach campfire";
     }
 
     async void Stop()
@@ -289,6 +364,7 @@ public class NetworkBootstrap : MonoBehaviour
         if (nm != null && (nm.IsHost || nm.IsClient)) nm.Shutdown();
         _state = "Disconnected";
         _joinCodeInput = "";
+        _hostedAlias = "";
         _inputState = InputState.Idle;
     }
 
@@ -343,13 +419,13 @@ public class NetworkBootstrap : MonoBehaviour
         }
 
         float topY = Screen.height * 0.18f;
-        if (mode == Mode.Relay && _services != null && _services.InRelaySession && !string.IsNullOrEmpty(_services.JoinCode))
+        if (!string.IsNullOrEmpty(_hostedAlias))
         {
             GUI.Label(new Rect(0, topY, w, 40), "CAMPFIRE CODE", _labelStyle);
             float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 1.5f);
             var prev = GUI.color;
             GUI.color = Color.Lerp(new Color(1f, 0.72f, 0.42f), new Color(1f, 0.88f, 0.62f), pulse);
-            GUI.Label(new Rect(0, topY + 50, w, 140), SpacedCode(_services.JoinCode), _codeStyle);
+            GUI.Label(new Rect(0, topY + 50, w, 140), SpacedCode(_hostedAlias), _codeStyle);
             GUI.color = prev;
         }
 
@@ -358,7 +434,7 @@ public class NetworkBootstrap : MonoBehaviour
         if (mode == Mode.Relay && Application.isEditor)
         {
             GUI.Label(new Rect(20, 80, 220, 28), "Join code (editor):");
-            _joinCodeInput = GUI.TextField(new Rect(240, 80, 220, 28), _joinCodeInput ?? "", 8).ToUpper();
+            _joinCodeInput = (GUI.TextField(new Rect(240, 80, 120, 28), _joinCodeInput ?? "", CodeLength) ?? "").ToUpper();
         }
     }
 

@@ -1,3 +1,5 @@
+using System.Threading.Tasks;
+using ExitGames.Client.Photon;
 using Photon.Pun;
 using Photon.Realtime;
 using Photon.Voice.Unity;
@@ -98,6 +100,47 @@ public class VoiceBootstrap : MonoBehaviour
         if (_voice == null || _voice.Client == null) return;
         if (_inRoom) _voice.Client.OpLeaveRoom(false);
         _pendingRoom = null;
+    }
+
+    public bool SetRoomProperty(string key, string value)
+    {
+        var room = _voice?.Client?.CurrentRoom;
+        if (room == null) return false;
+        var props = new Hashtable { { key, value } };
+        return room.SetCustomProperties(props);
+    }
+
+    public string GetRoomProperty(string key)
+    {
+        var room = _voice?.Client?.CurrentRoom;
+        if (room == null) return null;
+        if (room.CustomProperties.TryGetValue(key, out object v)) return v as string;
+        return null;
+    }
+
+    public async Task<string> WaitForRoomPropertyAsync(string key, float timeoutSeconds = 5f, int pollMs = 200)
+    {
+        float waited = 0f;
+        while (waited < timeoutSeconds)
+        {
+            var v = GetRoomProperty(key);
+            if (!string.IsNullOrEmpty(v)) return v;
+            await Task.Delay(pollMs);
+            waited += pollMs / 1000f;
+        }
+        return null;
+    }
+
+    public async Task<bool> WaitForRoomJoinedAsync(float timeoutSeconds = 8f, int pollMs = 200)
+    {
+        float waited = 0f;
+        while (waited < timeoutSeconds)
+        {
+            if (_inRoom) return true;
+            await Task.Delay(pollMs);
+            waited += pollMs / 1000f;
+        }
+        return _inRoom;
     }
 
     void OnGUI()
