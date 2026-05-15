@@ -4,6 +4,7 @@ using UnityEngine;
 public class TutorialOverlay : MonoBehaviour
 {
     [SerializeField] private TextMesh text;
+    [SerializeField] private float billboardSmoothing = 8f;
 
     private NetworkBootstrap _net;
     private Camera _cam;
@@ -27,7 +28,10 @@ public class TutorialOverlay : MonoBehaviour
         {
             var toCam = transform.position - _cam.transform.position;
             if (toCam.sqrMagnitude > 0.0001f)
-                transform.rotation = Quaternion.LookRotation(toCam, Vector3.up);
+            {
+                var target = Quaternion.LookRotation(toCam, Vector3.up);
+                transform.rotation = Quaternion.Slerp(transform.rotation, target, billboardSmoothing * Time.deltaTime);
+            }
         }
 
         var nm = NetworkManager.Singleton;
@@ -35,11 +39,10 @@ public class TutorialOverlay : MonoBehaviour
 
         string mode  = _net != null ? _net.CurrentMode.ToString() : "";
         string state = _net != null ? _net.CurrentState           : "";
-        string btn   = _net != null ? _net.LastButton             : "";
 
         if (connected)
         {
-            text.text = $"{state}";
+            text.text = state;
         }
         else
         {
@@ -51,8 +54,7 @@ public class TutorialOverlay : MonoBehaviour
                 "PRESS Y TO SWITCH MODE\n" +
                 "PRESS A TO RECENTER\n" +
                 "\n" +
-                $"{state}" +
-                (string.IsNullOrEmpty(btn) ? "" : $"\nlast: {btn}");
+                state;
         }
     }
 }

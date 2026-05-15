@@ -130,13 +130,11 @@ public class NetworkBootstrap : MonoBehaviour
         if (p && !prevP)
         {
             _lastButton = $"{node} primary";
-            Debug.Log($"[Ctrl] {node} primary pressed");
             onPrimary?.Invoke();
         }
         if (s && !prevS)
         {
             _lastButton = $"{node} secondary";
-            Debug.Log($"[Ctrl] {node} secondary pressed");
             onSecondary?.Invoke();
         }
         prevP = p; prevS = s;

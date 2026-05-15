@@ -958,7 +958,7 @@ Transform:
   m_GameObject: {fileID: 814457549}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.8, z: 0}
+  m_LocalPosition: {x: -2.07, y: 1.26, z: 3.23}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -977,6 +977,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TutorialOverlay
   text: {fileID: 0}
+  billboardSmoothing: 8
 --- !u!102 &814457552
 TextMesh:
   serializedVersion: 3
@@ -995,7 +996,7 @@ TextMesh:
     A TO RECENTER'
   m_OffsetZ: 0
   m_CharacterSize: 0.05
-  m_LineSpacing: 1
+  m_LineSpacing: 1.3
   m_Anchor: 4
   m_Alignment: 1
   m_TabSize: 4
