@@ -16,22 +16,38 @@ Each item below is a single slice — one commit, one observable change.
 - **Hand/controller presence** — primitive placeholders tracking `XRNode.LeftHand` / `RightHand`.
 - **Trigger feedback** — subtle scale pulse via `XRControllerInputFeedback`.
 - **Minimal LAN multiplayer spike** — NGO + UnityTransport, owner-authoritative head pose sync.
+- **Remote seat presence** — first remote player anchored at `RemoteRig`; `PlayerSlot_B` placeholder hides while occupied.
+- **Remote hand sync** — `NetworkVariable<Vector3/Quaternion>` for left/right hand poses, seat-relative.
+- **Presence breathing** — subtle sine on remote head scale; non-owner only.
+- **Auth bootstrap** — `UnityServices.InitializeAsync` + anonymous sign-in via `Unity.Services.Authentication`.
+- **Relay join-code connectivity** — `MultiplayerService.CreateSessionAsync().WithRelayNetwork()`; 6-char code over internet.
+- **Cozy Quest join UX** — left X toggles Mode, left Y stops, right B opens `TouchScreenKeyboard` for the code; big spaced campfire code with warm pulse; explicit state strings.
 
-## Next
+## Next — Voice slices
 
-- **Place remote player at PlayerSlot_B** — first `PlayerHead` snaps to the empty seat; hide the static placeholder when occupied.
-- **Sync hand anchors** — same pattern as head, two more `NetworkObject`s per player.
-- **Voice chat** — Vivox or a peer-to-peer alternative, spatialised.
+Chosen direction: **Photon Voice 2 (free tier)**. Full rationale and alternatives considered in [voice-research.md](voice-research.md). Tiny slices in order:
+
+- **Voice A — Quest microphone capture probe.** No packages. Local `Microphone.Start`, OnGUI level meter. Verifies Android `RECORD_AUDIO` permission and Quest mic gain.
+- **Voice B — Photon Voice bootstrap.** Add Photon Voice 2 package + AppId asset. Connect to Photon Cloud independently of NGO/Relay. Status overlay only.
+- **Voice C — Mono voice between two Quests.** `Recorder` local + `Speaker` on remote `PlayerHead`. "Hello from Stockholm" moment.
+- **Voice D — Spatial voice.** `Speaker.AudioSource.spatialBlend = 1` so the voice comes from the right side of the fire.
+- **Voice E — Cozy polish.** Distance falloff, noise suppression, optional speech-bobbing affordance.
+
+Risks to revisit each slice: parallel sessions on Quest, mic-permission timing, echo when testing in the same room, AppId hygiene. Full list in [voice-research.md](voice-research.md#risks-and-open-questions).
+
+## Next — Other slices (deferable)
+
 - **Cozy polish** — bloom on the flame, ambient crackle `AudioSource`, dimmer global ambient.
 - **Avatar experiments** — replace capsules + cubes with low-poly shapes (a body silhouette, simple hand mitts).
 - **Interaction objects** — a stick to poke the fire, a stone you can pick up. Nothing more.
+- **Seat-facing tweak** — angle player slots slightly toward each other so eye-line crosses near the fire instead of running parallel.
 
 ## Later
 
-- **Internet multiplayer** — relay/STUN so it works outside LAN.
 - **Persistence** — name your seat, remember the last person who sat there.
 - **Shared activities** — sketching in the air, listening to a track together.
-- **Spatial audio polish** — fire crackle in 3D, voice attenuation by distance to fire.
+- **Reconnect** — auto-rejoin if WiFi blips during a session.
+- **Region/quality controls** — Photon region picker, voice bitrate sliders.
 
 ## Explicit non-goals
 
@@ -39,3 +55,4 @@ Each item below is a single slice — one commit, one observable change.
 - Combat / game systems.
 - Realistic graphics.
 - Cross-platform beyond Quest standalone in the medium term.
+- Matchmaking, friend lists, accounts.
