@@ -79,6 +79,8 @@ public class ServicesBootstrap : MonoBehaviour
 
     void OnGUI()
     {
+        if (!Application.isEditor) return;
+
         GUI.Label(new Rect(20, 110, 800, 30), _status);
         if (!string.IsNullOrEmpty(PlayerId))
             GUI.Label(new Rect(20, 140, 800, 30), $"PlayerId: {PlayerId}");

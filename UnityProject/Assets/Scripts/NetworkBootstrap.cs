@@ -12,6 +12,7 @@ public class NetworkBootstrap : MonoBehaviour
 {
     public enum Mode { Lan, Relay }
     public enum InputState { Idle, EditingCode }
+    public enum Phase { Idle, Hosting, Joining, Connected }
 
     [SerializeField] private string serverAddress = "127.0.0.1";
     [SerializeField] private ushort port = 7777;
@@ -29,6 +30,20 @@ public class NetworkBootstrap : MonoBehaviour
     public bool LeftHandValid => InputDevices.GetDeviceAtXRNode(XRNode.LeftHand).isValid;
     public bool RightHandValid => InputDevices.GetDeviceAtXRNode(XRNode.RightHand).isValid;
     public string HostedAlias => _hostedAlias;
+
+    public Phase CurrentPhase
+    {
+        get
+        {
+            if (_inputState == InputState.EditingCode) return Phase.Joining;
+            var nm = NetworkManager.Singleton;
+            if (nm == null) return Phase.Idle;
+            if (nm.IsClient && !nm.IsHost) return Phase.Connected;
+            if (nm.IsHost) return nm.ConnectedClientsIds.Count >= 2 ? Phase.Connected : Phase.Hosting;
+            if (_busy && mode == Mode.Relay) return Phase.Hosting;
+            return Phase.Idle;
+        }
+    }
 
     private const string LanRoomName = "lan-campfire";
     private const string CodeAlphabet = "ABC";
@@ -420,6 +435,8 @@ public class NetworkBootstrap : MonoBehaviour
 
     void OnGUI()
     {
+        if (!Application.isEditor) return;
+
         EnsureStyles();
 
         var nm = NetworkManager.Singleton;

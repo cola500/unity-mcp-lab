@@ -1,13 +1,16 @@
-using Unity.Netcode;
+using System.Text;
 using UnityEngine;
 
 public class TutorialOverlay : MonoBehaviour
 {
     [SerializeField] private TextMesh text;
     [SerializeField] private float billboardSmoothing = 8f;
+    [SerializeField] private float notificationSeconds = 3f;
 
     private NetworkBootstrap _net;
     private Camera _cam;
+    private string _lastSeenState = "";
+    private float _notificationUntil;
 
     void Awake()
     {
@@ -34,55 +37,80 @@ public class TutorialOverlay : MonoBehaviour
             }
         }
 
-        var nm = NetworkManager.Singleton;
-        bool connected = nm != null && (nm.IsHost || nm.IsClient);
+        if (_net == null) { text.text = ""; return; }
 
-        string mode  = _net != null ? _net.CurrentMode.ToString() : "";
-        string state = _net != null ? _net.CurrentState           : "";
+        string state = _net.CurrentState ?? "";
+        if (state != _lastSeenState)
+        {
+            _lastSeenState = state;
+            if (!string.IsNullOrEmpty(state)) _notificationUntil = Time.time + notificationSeconds;
+        }
+        bool showNotification = Time.time < _notificationUntil;
 
-        if (connected)
+        switch (_net.CurrentPhase)
         {
-            text.text = state;
+            case NetworkBootstrap.Phase.Joining:
+            {
+                int last = _net.CodeLengthSlots - 1;
+                bool onLast = _net.CodeSlot >= last;
+                text.text =
+                    "🔥  JOIN FIRE\n" +
+                    "\n" +
+                    _net.CodeDisplay + "\n" +
+                    "\n" +
+                    "A / X   change\n" +
+                    (onLast ? "B       join\n" : "B       next\n") +
+                    "Y       back";
+                break;
+            }
+
+            case NetworkBootstrap.Phase.Hosting:
+            {
+                if (!string.IsNullOrEmpty(_net.HostedAlias))
+                {
+                    text.text =
+                        "🔥  YOUR FIRE\n" +
+                        "\n" +
+                        "code\n" +
+                        SpaceLetters(_net.HostedAlias) + "\n" +
+                        "\n" +
+                        "waiting for friend";
+                }
+                else
+                {
+                    text.text =
+                        "🔥  YOUR FIRE\n" +
+                        "\n" +
+                        "waiting for friend";
+                }
+                break;
+            }
+
+            case NetworkBootstrap.Phase.Connected:
+                text.text = showNotification ? "🔥  " + state : "";
+                break;
+
+            case NetworkBootstrap.Phase.Idle:
+            default:
+                text.text =
+                    "🔥  CAMPFIRE\n" +
+                    "\n" +
+                    "X    host\n" +
+                    "B    join" +
+                    (showNotification ? "\n\n" + state : "");
+                break;
         }
-        else if (_net != null && _net.IsEditingCode)
+    }
+
+    static string SpaceLetters(string code)
+    {
+        if (string.IsNullOrEmpty(code)) return "";
+        var sb = new StringBuilder(code.Length * 2);
+        for (int i = 0; i < code.Length; i++)
         {
-            int lastSlot = _net.CodeLengthSlots - 1;
-            bool onLast = _net.CodeSlot >= lastSlot;
-            text.text =
-                $"Mode: {mode}\n" +
-                "\n" +
-                "JOIN CODE  (A B C)\n" +
-                _net.CodeDisplay + "\n" +
-                "\n" +
-                $"SLOT:  {_net.CodeSlot + 1} / {_net.CodeLengthSlots}\n" +
-                $"VALUE: {_net.CodeValue}\n" +
-                "\n" +
-                "A = NEXT LETTER     (hold to auto-cycle)\n" +
-                "X = PREVIOUS LETTER (hold to auto-cycle)\n" +
-                (onLast ? "B = JOIN\n" : "B = NEXT SLOT\n") +
-                "Y = BACK\n" +
-                "\n" +
-                $"LAST INPUT:  {(string.IsNullOrEmpty(_net.LastButton) ? "—" : _net.LastButton)}\n" +
-                $"LAST ACTION: {(string.IsNullOrEmpty(_net.LastAction) ? "—" : _net.LastAction)}\n" +
-                $"CTRL: L={(_net.LeftHandValid ? "ok" : "off")}  R={(_net.RightHandValid ? "ok" : "off")}\n" +
-                "\n" +
-                state;
+            if (i > 0) sb.Append(' ');
+            sb.Append(code[i]);
         }
-        else
-        {
-            text.text =
-                $"Mode: {mode}\n" +
-                "\n" +
-                "PRESS X TO HOST\n" +
-                "PRESS B TO JOIN\n" +
-                "PRESS Y TO SWITCH MODE\n" +
-                "PRESS A TO RECENTER\n" +
-                "\n" +
-                $"LAST INPUT:  {(_net == null || string.IsNullOrEmpty(_net.LastButton) ? "—" : _net.LastButton)}\n" +
-                $"LAST ACTION: {(_net == null || string.IsNullOrEmpty(_net.LastAction) ? "—" : _net.LastAction)}\n" +
-                $"CTRL: L={(_net != null && _net.LeftHandValid ? "ok" : "off")}  R={(_net != null && _net.RightHandValid ? "ok" : "off")}\n" +
-                "\n" +
-                state;
-        }
+        return sb.ToString();
     }
 }
