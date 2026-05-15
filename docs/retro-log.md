@@ -26,6 +26,10 @@ Lessons that were not obvious before we shipped the slice they came from.
 
 **`get_gameobject` returns large payloads.** ~250 lines per object, with circular references and `Unable to serialize` placeholders. Workable, just noisy.
 
+## Unity Cloud
+
+**"Missing Project ID — you are not a member of this project" can appear on build with no project-side change.** `ProjectSettings.asset` still has the correct `cloudProjectId` / `organizationId`, the account is the same one that linked the project, the dashboard shows everything Active. The dialog is Unity Editor's stale auth-token cache mis-answering its own membership check. Fix: `Unity → Quit`, reopen the project via Hub, build again. No code, settings, or dashboard changes needed.
+
 ## Build / device
 
 **Rosetta 2 is required even though Unity is arm64-native.** Some toolchain step needs it. Symptom: a dialog about Rosetta when running Unity in batch mode. Fix: `sudo softwareupdate --install-rosetta --agree-to-license`. Not prominently documented anywhere.
