@@ -20,7 +20,8 @@ public static class NetworkSetup
         root.AddComponent<ClientNetworkTransform>();
         root.AddComponent<NetworkHead>();
 
-        AddPrimitiveChild(root.transform, "HeadVisual", PrimitiveType.Sphere, Vector3.one * 0.2f);
+        var head = AddPrimitiveChild(root.transform, "HeadVisual", PrimitiveType.Sphere, Vector3.one * 0.2f);
+        head.AddComponent<PresenceBreath>();
         AddPrimitiveChild(root.transform, "LeftHandVisual",  PrimitiveType.Cube, new Vector3(0.07f, 0.04f, 0.12f));
         AddPrimitiveChild(root.transform, "RightHandVisual", PrimitiveType.Cube, new Vector3(0.07f, 0.04f, 0.12f));
 
@@ -38,7 +39,7 @@ public static class NetworkSetup
         Debug.Log($"[NetworkSetup] Prefab saved: {PrefabPath}");
     }
 
-    private static void AddPrimitiveChild(Transform parent, string name, PrimitiveType primitive, Vector3 localScale)
+    private static GameObject AddPrimitiveChild(Transform parent, string name, PrimitiveType primitive, Vector3 localScale)
     {
         var go = GameObject.CreatePrimitive(primitive);
         go.name = name;
@@ -46,6 +47,7 @@ public static class NetworkSetup
         go.transform.localScale = localScale;
         var collider = go.GetComponent<Collider>();
         if (collider != null) Object.DestroyImmediate(collider);
+        return go;
     }
 
     [MenuItem("Tools/Network Setup/Configure Scene NetworkManager")]

@@ -2,6 +2,8 @@
 UnityProject/[Ll]ibrary/
 UnityProject/[Tt]emp/
 UnityProject/\.utmp/
+UnityProject/Assets/Resources/PerformanceTest*.json
+UnityProject/Assets/Resources/PerformanceTest*.json.meta
 UnityProject/[Oo]bj/
 UnityProject/[Bb]uild/
 UnityProject/[Bb]uilds/
