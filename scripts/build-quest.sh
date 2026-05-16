@@ -10,14 +10,21 @@
 # never auto-deleted.
 #
 # Usage:
-#   ./scripts/build-quest.sh                            # build only
-#   ./scripts/build-quest.sh --install                  # build + adb install -r
-#   ./scripts/build-quest.sh --launch                   # build + install + monkey-launch
-#   ./scripts/build-quest.sh --install-only             # skip build, install CampfireVR-latest.apk
-#   ./scripts/build-quest.sh --install-only --launch    # skip build, install + launch
-#   ./scripts/build-quest.sh --apk PATH                 # install a specific APK (overrides latest)
+#   ./scripts/build-quest.sh                            # build only (Editor must be CLOSED)
+#   ./scripts/build-quest.sh --install                  # build + adb install -r (Editor CLOSED)
+#   ./scripts/build-quest.sh --launch                   # build + install + monkey-launch (Editor CLOSED)
+#   ./scripts/build-quest.sh --install-only             # install newest Builds/*.apk — Editor can stay OPEN
+#   ./scripts/build-quest.sh --install-only --launch    # install + launch — Editor can stay OPEN
+#   ./scripts/build-quest.sh --apk PATH                 # install a specific APK (overrides newest)
 #   ./scripts/build-quest.sh --install-only --apk PATH  # install a specific older APK
+#   ./scripts/build-quest.sh --list                     # list APKs in Builds/ by mtime, newest first
 #   ./scripts/build-quest.sh --help
+#
+# Fast iteration loop (no Editor close needed):
+#   1. In Unity Editor: Tools → Quest Setup → Build Remote Fika APK  (or Cmd+B for Build And Run)
+#   2. In terminal:     ./scripts/build-quest.sh --install-only --launch
+#   See docs/release-process.md "Fast iteration workflow" for the full pattern,
+#   including the one-click Editor menu Build + Deploy to Quest.
 #
 # Version tag for the filename is resolved in this order:
 #   1) First [v…] heading in CHANGELOG.md (e.g. "v0.1.2-session-fix")
@@ -27,10 +34,11 @@
 # Requirements:
 #   * Unity ${UNITY_VERSION} (set via env if you upgrade) installed under
 #     /Applications/Unity/Hub/Editor/<version>/Unity.app
-#   * Unity Editor must NOT have CampfireVR open in another window — Unity
-#     can't acquire the project lock from batchmode if the GUI is editing
-#     the same project. Close the Editor first, or use a separate Unity
-#     instance for batch builds.
+#   * Unity Editor must NOT have CampfireVR open in another window FOR FULL
+#     BUILDS ONLY. Batchmode can't acquire the project lock if the GUI is
+#     editing the same project; close the Editor first, or use a separate
+#     Unity instance. `--install-only` and `--list` do not invoke Unity and
+#     are safe to run with the Editor open at any time.
 #   * For --install / --launch: Quest connected via USB-C with Developer
 #     Mode enabled. Run `adb devices` once first time to authorise.
 #
@@ -65,7 +73,7 @@ LATEST_APK="${OUTPUT_DIR}/CampfireVR-latest.apk"
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0") [--install] [--launch] [--install-only] [--apk PATH] [--help]
+Usage: $(basename "$0") [--install] [--launch] [--install-only] [--apk PATH] [--list] [--help]
 
 Builds CampfireVR APK via Unity batchmode. Wraps
 Tools/Quest Setup/Build Remote Fika APK from QuestBuildAPK.cs.
@@ -77,9 +85,11 @@ Each successful build produces:
 Options:
   --install        adb install -r the freshly built APK onto the connected Quest
   --launch         adb monkey-launch the app after install (implies --install)
-  --install-only   skip the Unity build; install CampfireVR-latest.apk
-  --apk PATH       install the specific APK at PATH instead of latest/freshly-built
+  --install-only   skip the Unity build; install the newest CampfireVR-*.apk
+                   in Builds/ (mtime). Editor can stay OPEN.
+  --apk PATH       install the specific APK at PATH instead of newest/freshly-built
                    (works with or without --install-only)
+  --list           list APKs in Builds/ by mtime, newest first; does not install
   -h, --help       show this message
 
 Env:
@@ -192,10 +202,30 @@ EOF
     fi
 }
 
+# Lists all CampfireVR-*.apk files in Builds/ by mtime, newest first. Used
+# by --list (user-facing) and by find_newest_apk (programmatic).
+list_apks() {
+    if [[ ! -d "$OUTPUT_DIR" ]]; then return; fi
+    # Portable mtime-sort: ls -t handles macOS bash 3.2 fine. Filter to
+    # CampfireVR-*.apk so unrelated files in Builds/ don't slip in.
+    ( cd "$OUTPUT_DIR" && ls -1t CampfireVR-*.apk 2>/dev/null ) | while IFS= read -r f; do
+        echo "${OUTPUT_DIR}/${f}"
+    done
+}
+
+# Returns the path of the newest APK in Builds/, or empty if none exist.
+# Always prefers the actual newest file on disk over any specific filename,
+# so Editor-side builds (which land at the QuestBuildAPK temp path) get
+# picked up automatically without the user knowing the path.
+find_newest_apk() {
+    list_apks | head -1
+}
+
 SKIP_BUILD=0
 INSTALL=0
 LAUNCH=0
 EXPLICIT_APK=""
+LIST_ONLY=0
 
 # Arg loop supports both flag-only and flag-with-value forms.
 while [[ $# -gt 0 ]]; do
@@ -211,10 +241,31 @@ while [[ $# -gt 0 ]]; do
             EXPLICIT_APK="$2"
             shift 2
             ;;
+        --list)         LIST_ONLY=1; shift ;;
         -h|--help)      usage; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; usage >&2; exit 1 ;;
     esac
 done
+
+# --list is a read-only inspection mode — runs without touching Unity or adb.
+if [[ $LIST_ONLY -eq 1 ]]; then
+    if [[ ! -d "$OUTPUT_DIR" ]]; then
+        echo "No Builds/ directory yet."
+        exit 0
+    fi
+    found=0
+    while IFS= read -r apk; do
+        [[ -z "$apk" ]] && continue
+        size=$(du -h "$apk" | cut -f1)
+        mtime=$(stat -f "%Sm" "$apk")
+        echo "  ${size}  ${mtime}  ${apk#"${REPO_ROOT}/"}"
+        found=1
+    done < <(list_apks)
+    if [[ $found -eq 0 ]]; then
+        echo "No APKs in $OUTPUT_DIR yet — run without --list to build one."
+    fi
+    exit 0
+fi
 
 # Compute the versioned-build filename only when we'll actually build.
 if [[ $SKIP_BUILD -eq 0 ]]; then
@@ -281,24 +332,41 @@ if [[ $SKIP_BUILD -eq 0 ]]; then
 fi
 
 # --- resolve which APK to install ---------------------------------------
+#
+# Resolution order:
+#   1. --apk PATH         (always wins — explicit override)
+#   2. --install-only     (auto-detect newest CampfireVR-*.apk in Builds/ by
+#                         mtime; lets Editor-side builds get picked up
+#                         without the user supplying a filename)
+#   3. (after a fresh build) the file we just produced this run
 
 if [[ -n "$EXPLICIT_APK" ]]; then
     APK_PATH="$EXPLICIT_APK"
 elif [[ $SKIP_BUILD -eq 1 ]]; then
-    APK_PATH="$LATEST_APK"
+    APK_PATH="$(find_newest_apk)"
+    if [[ -z "$APK_PATH" ]]; then
+        # Older recipes may still rely on the literal CampfireVR-latest.apk
+        # pointer; fall back to it so backwards-compat shell snippets work.
+        [[ -f "$LATEST_APK" ]] && APK_PATH="$LATEST_APK"
+    fi
 else
     APK_PATH="$VERSIONED_APK"
 fi
 
-if [[ $INSTALL -eq 1 && ! -f "$APK_PATH" ]]; then
-    echo "[install] APK not found: $APK_PATH" >&2
+if [[ $INSTALL -eq 1 && ( -z "$APK_PATH" || ! -f "$APK_PATH" ) ]]; then
+    echo "[install] APK not found: ${APK_PATH:-<none>}" >&2
     if [[ $SKIP_BUILD -eq 1 && -z "$EXPLICIT_APK" ]]; then
-        echo "[install] Run without --install-only first to produce a build." >&2
+        echo "[install] No CampfireVR-*.apk in $OUTPUT_DIR." >&2
+        echo "[install] Either:" >&2
+        echo "[install]   - run without --install-only to build via batchmode (Editor must be closed)" >&2
+        echo "[install]   - build inside the open Editor via Tools → Quest Setup → Build Remote Fika APK" >&2
+        echo "[install]   - or use Tools → Quest Setup → Build + Deploy to Quest for a one-click pipeline" >&2
     fi
     exit 5
 fi
 
 if [[ $INSTALL -eq 1 && $SKIP_BUILD -eq 1 ]]; then
+    echo "[install-only] Editor can stay open — this path doesn't invoke Unity."
     echo "[install-only] Using APK · $(du -h "$APK_PATH" | cut -f1) · built $(stat -f %Sm "$APK_PATH") · ${APK_PATH#"${REPO_ROOT}/"}"
 fi
 

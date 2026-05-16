@@ -4,6 +4,53 @@ How to cut a new test build and ship it to a friend. Five steps, ~10 minutes if 
 
 Tone: this is a one-person indie project. No CI, no release governance, no release notes review board. Just disciplined notes so future-me can reproduce what past-me did.
 
+The five-step flow further down is for **release builds** — versioned, packaged, sent to a friend. For day-to-day "tweak scene → headset to validate" iteration use the workflow in the next section, which keeps the Editor open and skips changelog ceremony.
+
+## Fast iteration workflow
+
+Optimised for "tiny VR tweak → deploy to headset fast." No Editor close, no changelog bump, no friend package.
+
+### One-click (recommended)
+
+With the Unity Editor open and a Quest connected via USB-C:
+
+```
+Tools → Quest Setup → Build + Deploy to Quest
+```
+
+That menu (added in `Assets/Editor/Build/QuestBuildAPK.cs`) runs `BuildPipeline.BuildPlayer` inside the Editor process — no batchmode lock conflict because the build happens in the same Unity instance that holds the project lock — then shells out to `scripts/build-quest.sh --install-only --launch` to push the APK to the headset and start it.
+
+Total time on a warm build: ~30–60 s from menu click to seeing the scene in the Quest. Install output lands in the Editor's Console.
+
+Caveats this path accepts in exchange for speed:
+- APK is written at the static `Builds/CampfireVR-remote-fika-test-v0.1.apk` filename, not a versioned `CampfireVR-<version>-<YYYYMMDD-HHMM>.apk`. Fine for iteration; not what you want to share with a friend.
+- `Assets/Resources/build-info.json` is NOT regenerated (only the terminal script does that). The APK will report whichever commit / dirty flag was baked in by the last script-side build. For "I want the headset log to show the exact commit I'm testing", run the script instead.
+
+### Two-step (when you want the build inside Editor but install separately)
+
+1. **Build inside Unity** — either:
+   - `Tools → Quest Setup → Build Remote Fika APK` (menu we already had), OR
+   - Standard `Cmd+B` "Build And Run" with Run Device set to the connected Quest (Unity does the install itself in this case — even faster, but you don't go through the script's adb path).
+2. **In a terminal (Editor stays open):**
+   ```sh
+   ./scripts/build-quest.sh --install-only --launch
+   ```
+   `--install-only` does NOT invoke Unity; the project lock is irrelevant. The script auto-detects the newest `CampfireVR-*.apk` in `Builds/` by mtime, so it picks up whatever the Editor just wrote without you specifying a filename.
+
+If you want to see what's currently in `Builds/` before installing:
+
+```sh
+./scripts/build-quest.sh --list
+```
+
+Sorted newest-first with size + mtime so you can tell at a glance which APK `--install-only` would pick.
+
+### Why batchmode requires the Editor closed (full builds only)
+
+`./scripts/build-quest.sh` without `--install-only` launches Unity in batchmode, which tries to open `UnityProject/` as a fresh project instance. Unity enforces single-writer access to a project's `Library/` folder via a lock file — if the Editor GUI is already holding that lock, batchmode bails. There's no way around this without a second copy of the Editor opening a copy of the project. That's why the iteration workflow above puts the build inside the open Editor instead of shelling out — same process, same lock, no conflict.
+
+`--install-only` and `--list` don't invoke Unity at all (just adb + filesystem reads) so they're completely safe with the Editor open.
+
 ## 1. Decide the version tag
 
 Open [CHANGELOG.md](../CHANGELOG.md) and pick the next `v0.x.y-suffix` for this build.

@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 public static class QuestBuildAPK
 {
@@ -14,6 +16,79 @@ public static class QuestBuildAPK
     public static void Build()
     {
         BuildTo(Path.Combine(OutputDir, DefaultName));
+    }
+
+    // One-click in-Editor build → install → launch. The whole pipeline runs
+    // without closing the Editor: Build() executes inside the same process
+    // that holds the project lock (no batchmode lock conflict), then the
+    // shell script is shelled out for the adb side (install + launch).
+    //
+    // The shell script's --install-only path auto-detects the newest
+    // CampfireVR-*.apk in Builds/ by mtime, so the freshly-built APK at
+    // the static DefaultName path is picked up automatically without us
+    // having to pass --apk PATH.
+    //
+    // Use this for "tiny VR tweak → headset" iteration. For release-quality
+    // builds (versioned filename + build-info.json with current git state)
+    // close the Editor and run scripts/build-quest.sh from the terminal.
+    [MenuItem("Tools/Quest Setup/Build + Deploy to Quest")]
+    public static void BuildAndDeploy()
+    {
+        string apkRelative = Path.Combine(OutputDir, DefaultName);
+        BuildTo(apkRelative);
+
+        // BuildTo logs errors itself; bail if the APK doesn't exist on disk.
+        string apkAbsolute = Path.GetFullPath(apkRelative);
+        if (!File.Exists(apkAbsolute))
+        {
+            Debug.LogError($"[QuestBuildAPK] Build did not produce {apkAbsolute}; skipping install.");
+            return;
+        }
+
+        // Locate the install script. Application.dataPath is .../UnityProject/Assets;
+        // the repo root sits two levels up, and scripts/ lives there.
+        string repoRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..", ".."));
+        string script = Path.Combine(repoRoot, "scripts", "build-quest.sh");
+        if (!File.Exists(script))
+        {
+            Debug.LogError($"[QuestBuildAPK] Install script not found at {script}; APK is built but not deployed.");
+            return;
+        }
+
+        // Run synchronously so the user sees install output in the Editor
+        // console before the menu returns. Install + launch is a few
+        // seconds — fast enough not to need async/threading.
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "/bin/bash",
+                Arguments = $"\"{script}\" --install-only --launch",
+                WorkingDirectory = repoRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            using (var proc = Process.Start(psi))
+            {
+                string stdout = proc.StandardOutput.ReadToEnd();
+                string stderr = proc.StandardError.ReadToEnd();
+                proc.WaitForExit();
+
+                if (!string.IsNullOrEmpty(stdout)) Debug.Log($"[QuestBuildAPK] install-script stdout:\n{stdout}");
+                if (!string.IsNullOrEmpty(stderr)) Debug.LogWarning($"[QuestBuildAPK] install-script stderr:\n{stderr}");
+
+                if (proc.ExitCode == 0)
+                    Debug.Log("[QuestBuildAPK] Build + Deploy complete — check your headset.");
+                else
+                    Debug.LogError($"[QuestBuildAPK] Install script exited {proc.ExitCode}. APK is built at {apkAbsolute}; you can retry deployment from the terminal.");
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[QuestBuildAPK] Could not run install script: {e.Message}. APK is built at {apkAbsolute}; install manually with: scripts/build-quest.sh --install-only --launch");
+        }
     }
 
     // Separate menu: force legacy input handling. Run this once after XRI
