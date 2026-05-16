@@ -19,6 +19,12 @@ UnityProject/Assets/Photon/PhotonVoice/PhotonVoiceLibs/VisionOS.meta
 # the scene references the material by GUID and resolves once imported.
 UnityProject/Assets/Real Stars Skybox/
 UnityProject/Assets/Real Stars Skybox.meta
+
+# Piloto Studio Campfires/Torches pack (Unity Asset Store — same EULA).
+# Imported locally via Package Manager → My Assets. Not used in the build yet,
+# kept available for a future scene-polish slice. Don't commit the source.
+UnityProject/Assets/Piloto Studio/
+UnityProject/Assets/Piloto Studio.meta
 UnityProject/[Oo]bj/
 UnityProject/[Bb]uild/
 UnityProject/[Bb]uilds/
