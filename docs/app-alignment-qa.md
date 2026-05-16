@@ -1,6 +1,8 @@
 # CampfireVR — alignment QA
 
 > A genomlysning of what the app actually does (in code + scene) vs. what the docs claim it does. No functionality changed — this is an audit only. Verification stamps: **[code]** = read from source; **[scene]** = inspected via mcp-unity / Scene YAML; **[doc]** = quoted from a markdown file in `docs/` or the README; **[needs headset]** = cannot confirm from this seat.
+>
+> **Update 2026-05-16:** The "Single-letter room" slice replaced the 3-character ABC code with a single-letter A–Z room (default A), removed the `EditingCode` input phase, and moved letter cycling to the right thumbstick (always-on). Sections below tagged with **[obsolete: single-letter slice]** describe the pre-slice 3-letter behaviour and are kept for historical context only. The current code uses `CodeAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"`, `CodeLength = 1`, and `_codeChars = { 'A' }` by default.
 
 ## Executive summary
 
@@ -49,28 +51,31 @@ Verified by reading `Assets/Scripts/NetworkBootstrap.cs`, `TutorialOverlay.cs`, 
 
 ### Phases (drives the tutorial overlay)
 
-`NetworkBootstrap.Phase`: `{ Idle, Hosting, Joining, Connecting, Connected }` **[code]**, derived from a mix of `_inputState == EditingCode`, `NetworkManager.IsHost/IsClient/IsConnectedClient`, `_busy`, and `_joinCodeInput`.
+`NetworkBootstrap.Phase`: `{ Idle, Hosting, Connecting, Connected }` **[code]** **[updated: `Joining` phase removed in single-letter slice; derivation no longer reads `_inputState`]**, derived from `NetworkManager.IsHost/IsClient/IsConnectedClient`, `_busy`, and `_joinCodeInput`.
 
-### Controller bindings (Quest)
+### Controller bindings (Quest) **[updated: single-letter slice]**
 
-| Button | In **idle** | In **editing code** |
-|---|---|---|
-| **Right A** (right primary) | Recenter view | Cycle current letter +1 |
-| **Right B** (right secondary) | LAN: start client. Relay: enter code editor. | Advance slot; on last slot, join. |
-| **Left X** (left primary) | Start host | Cycle current letter −1 |
-| **Left Y** (left secondary) | Toggle mode LAN ⇄ Relay | Previous slot; on slot 0, cancel back to idle |
-| **Right thumbstick** | (no effect) | Cycle letters with deadzone 0.5, repeat 0.35 s / 0.12 s |
+The `EditingCode` input phase was removed. All bindings are now phase-independent and behave the same in idle, hosting, and connected states.
+
+| Button | Action |
+|---|---|
+| **Right A** (right primary) | Recenter view |
+| **Right B** (right secondary) | LAN: start client. Relay: join the displayed room. |
+| **Left X** (left primary) | Start host on the displayed room |
+| **Left Y** (left secondary) | Toggle mode LAN ⇄ Relay |
+| **Right thumbstick** | Cycle current room letter A↔Z (deadzone 0.5, repeat 0.35 s / 0.12 s). Always live. |
 
 There is **no in-headset binding that calls `Stop()`**. The `Stop()` method exists in `NetworkBootstrap` (line 459) but is only triggered by the **editor** `KeyCode.X` (line 137). On a Quest build, users must use the Meta system menu to quit the app to leave a session. This is documented in `docs/remote-fika-test.md` as a known rough edge.
 
-### Join code
+### Room code **[updated: single-letter slice]**
 
-- Alphabet: `"ABC"` **[code]**, line 56
-- Length: `3` slots **[code]**, line 57
-- Total possible codes: **27**
-- Code entry: world-space ABC slot picker via thumbstick (primary) or A/X buttons (fallback). No `TouchScreenKeyboard`.
-- Host's "alias" generated with `Random.Range` from the same ABC × 3 alphabet.
-- Voice room name and Relay code property both use the alias as the lookup key (`VoiceBootstrap.JoinRoom(alias)` + `SetRoomProperty("rc", realCode)`).
+- Alphabet: `"ABCDEFGHIJKLMNOPQRSTUVWXYZ"` **[code]**
+- Length: `1` slot **[code]**
+- Total possible rooms: **26**
+- Default room: `A` — fresh launch can host or join without any user input.
+- Room selection: right thumbstick cycles the single letter. No edit mode, no picker, no `TouchScreenKeyboard`.
+- Host alias = current letter (no `Random.Range`). Both host and joiner read the same letter from `_codeChars[0]`.
+- Voice room name and Relay code property still use the alias (now a single letter) as the lookup key (`VoiceBootstrap.JoinRoom(alias)` + `SetRoomProperty("rc", realCode)`).
 
 ### State strings (cozy copy)
 
@@ -116,14 +121,14 @@ What's broken/missing for a normal user:
 **Status: works as designed, but the word "Relay" is wrong for a user.**
 
 What works (verified in code):
-- Pressing **left X** in idle on Relay → `StartHost()` → `_services.HostRelayAsync()` (Unity Multiplayer Service with `WithRelayNetwork()`) → returns a Relay code → 3-char ABC alias generated → voice room joined under that alias → Relay code published as a Photon room property `rc`.
+- Pressing **left X** in idle on Relay → `StartHost()` → `_services.HostRelayAsync()` (Unity Multiplayer Service with `WithRelayNetwork()`) → returns a Relay code → ~~3-char ABC alias generated~~ → **[updated: single-letter slice]** single-letter alias = current `_codeChars[0]` → voice room joined under that alias → Relay code published as a Photon room property `rc`.
 - Pressing **right B** in idle on Relay → enters the world-space ABC code editor (`EnterCodeEditor()`).
 - After the joiner enters 3 letters and presses B on the last slot → `StartClient()` → voice room joined by alias → polls Photon for `rc` property → `JoinRelayAsync(realCode)` connects NGO via Relay.
 - State strings walk a readable arc: `Creating fire → Sharing code → Waiting for friend → Friend joined` (host side), `Enter code → Looking for fire → Joining fire → Connected` (client side).
 
 What's confusing for a user:
 - The UI uses the word **"Relay"** (the `Mode` enum name leaks into `mode · Relay` via `ToString()` in `TutorialOverlay.cs:123`). "Relay" is Unity dashboard jargon — most users have no model for what it means. They want to know "do my friend and I have to be on the same Wi-Fi?" The correct user-visible word is **"Internet"** (or "Online").
-- **27 possible codes.** ABC × 3 = 27. Two concurrent sessions on the public service have a real (though small) chance of colliding on the same alias. The remote-fika doc already calls this out as a known rough edge.
+- ~~**27 possible codes.** ABC × 3 = 27.~~ **[updated: single-letter slice]** **26 possible rooms.** A–Z = 26 single-letter rooms. Default `A` on both sides Just Works for one pair; concurrent pairs on the same Photon AppId need to agree on different letters out of band.
 
 ## UX / copy findings
 
@@ -219,7 +224,7 @@ Y      back
 In rough priority order:
 
 1. **Gate `VoiceBootstrap.OnGUI` behind `Application.isEditor`** — 1-line fix, removes a dev-debug overlay from headset.
-2. **Update `README.md` "Multiplayer testing" and "Relay flow" sections** to reflect the current 3-char ABC code, thumbstick entry, no Stop button, and accurate button mappings. Drop the `TouchScreenKeyboard` mention.
+2. ~~**Update `README.md` "Multiplayer testing" and "Relay flow" sections** to reflect the current 3-char ABC code, thumbstick entry, no Stop button, and accurate button mappings. Drop the `TouchScreenKeyboard` mention.~~ **[done in single-letter slice — README now describes the A–Z single-letter room]**
 3. **Update `README.md` "Next slices"** — remove items that are already done; either delete the section or repoint it at `docs/roadmap.md`.
 4. **Deduplicate Voice C/D/E in `docs/roadmap.md`** — remove the second copy that's listed as not-done.
 5. **Rename UI label `Relay → Internet`** in `TutorialOverlay.cs`. Keep `Mode.Relay` internally so we don't ripple through code. Example: `string ModeLabel(NetworkBootstrap.Mode m) => m == NetworkBootstrap.Mode.Relay ? "Internet" : "Same Wi-Fi";`.

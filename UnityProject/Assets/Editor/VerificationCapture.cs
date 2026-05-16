@@ -5,47 +5,46 @@ using UnityEngine;
 
 public static class VerificationCapture
 {
-    private const string OutputSubDir = "../../docs/verification/abc-join-flow";
+    private const string OutputSubDir = "../../docs/verification/join-flow";
 
-    [MenuItem("Tools/Verification/Capture 1 — Idle Relay")]
-    public static void Capture1() => Capture("01-idle-relay", net =>
+    [MenuItem("Tools/Verification/Capture 1 — Idle Relay (Room A)")]
+    public static void Capture1() => Capture("01-idle-room-a", net =>
     {
         SetMode(net, "Relay");
-        SetEnum(net, "_inputState", "Idle");
         SetField(net, "_hostedAlias", "");
         SetField(net, "_joinCodeInput", "");
         SetField(net, "_state", "Idle");
+        SetLetter(net, 'A');
     });
 
-    [MenuItem("Tools/Verification/Capture 2 — Hosting alias BCA")]
-    public static void Capture2() => Capture("02-hosting-bca", net =>
+    [MenuItem("Tools/Verification/Capture 2 — Hosting Room A")]
+    public static void Capture2() => Capture("02-hosting-room-a", net =>
     {
         SetMode(net, "Relay");
-        SetEnum(net, "_inputState", "Idle");
-        SetField(net, "_hostedAlias", "BCA");
-        SetField(net, "_state", "Waiting for friend…");
+        SetField(net, "_hostedAlias", "A");
+        SetField(net, "_state", "Waiting for friend");
+        SetLetter(net, 'A');
     });
 
-    [MenuItem("Tools/Verification/Capture 3 — Editor slot 1")]
-    public static void Capture3() => Capture("03-editor-slot1", net =>
+    [MenuItem("Tools/Verification/Capture 3 — Idle after cycling to Room D")]
+    public static void Capture3() => Capture("03-idle-room-d", net =>
     {
         SetMode(net, "Relay");
-        SetEnum(net, "_inputState", "EditingCode");
         SetField(net, "_hostedAlias", "");
-        SetField(net, "_state", "Slot 1 of 3");
-        SetField(net, "_slotIndex", 0);
-        SetCodeChars(net, 'A', 'A', 'A');
+        SetField(net, "_joinCodeInput", "");
+        SetField(net, "_state", "Room D");
+        SetLetter(net, 'D');
     });
 
-    [MenuItem("Tools/Verification/Capture 4 — Editor slot 3 (B = JOIN)")]
-    public static void Capture4() => Capture("04-editor-slot3-join", net =>
+    [MenuItem("Tools/Verification/Capture 4 — Joining Room D")]
+    public static void Capture4() => Capture("04-joining-room-d", net =>
     {
         SetMode(net, "Relay");
-        SetEnum(net, "_inputState", "EditingCode");
         SetField(net, "_hostedAlias", "");
-        SetField(net, "_state", "Slot 3 of 3");
-        SetField(net, "_slotIndex", 2);
-        SetCodeChars(net, 'B', 'C', 'A');
+        SetField(net, "_joinCodeInput", "D");
+        SetField(net, "_busy", true);
+        SetField(net, "_state", "Looking for room D");
+        SetLetter(net, 'D');
     });
 
     private static void Capture(string name, System.Action<NetworkBootstrap> prepare)
@@ -85,16 +84,10 @@ public static class VerificationCapture
         if (f != null) f.SetValue(o, System.Enum.Parse(f.FieldType, modeName));
     }
 
-    private static void SetEnum(object o, string field, string valueName)
-    {
-        var f = o.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance);
-        if (f != null) f.SetValue(o, System.Enum.Parse(f.FieldType, valueName));
-    }
-
-    private static void SetCodeChars(object o, char a, char b, char c)
+    private static void SetLetter(object o, char letter)
     {
         var f = o.GetType().GetField("_codeChars", BindingFlags.NonPublic | BindingFlags.Instance);
-        if (f != null && f.GetValue(o) is char[] arr && arr.Length >= 3)
-        { arr[0] = a; arr[1] = b; arr[2] = c; }
+        if (f != null && f.GetValue(o) is char[] arr && arr.Length >= 1)
+            arr[0] = letter;
     }
 }

@@ -11,8 +11,7 @@ using UnityEngine.XR;
 public class NetworkBootstrap : MonoBehaviour
 {
     public enum Mode { Lan, Relay }
-    public enum InputState { Idle, EditingCode }
-    public enum Phase { Idle, Hosting, Joining, Connecting, Connected }
+    public enum Phase { Idle, Hosting, Connecting, Connected }
 
     [SerializeField] private string serverAddress = "127.0.0.1";
     [SerializeField] private ushort port = 7777;
@@ -23,11 +22,8 @@ public class NetworkBootstrap : MonoBehaviour
     public string CurrentState => _state;
     public string LastButton => _lastButton;
     public string LastAction => _lastAction;
-    public bool IsEditingCode => _inputState == InputState.EditingCode;
-    public string CodeDisplay => FormatCode();
-    public int CodeSlot => _slotIndex;
-    public int CodeLengthSlots => CodeLength;
-    public char CodeValue => _codeChars[Mathf.Clamp(_slotIndex, 0, CodeLength - 1)];
+    public char CurrentLetter => _codeChars[0];
+    public string CurrentRoom => new string(_codeChars);
     public bool LeftHandValid => InputDevices.GetDeviceAtXRNode(XRNode.LeftHand).isValid;
     public bool RightHandValid => InputDevices.GetDeviceAtXRNode(XRNode.RightHand).isValid;
     public string HostedAlias => _hostedAlias;
@@ -37,7 +33,6 @@ public class NetworkBootstrap : MonoBehaviour
     {
         get
         {
-            if (_inputState == InputState.EditingCode) return Phase.Joining;
             var nm = NetworkManager.Singleton;
             if (nm == null) return Phase.Idle;
             if (nm.IsClient && !nm.IsHost)
@@ -54,11 +49,9 @@ public class NetworkBootstrap : MonoBehaviour
     }
 
     private const string LanRoomName = "lan-campfire";
-    private const string CodeAlphabet = "ABC";
-    private const int CodeLength = 3;
+    private const string CodeAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private const int CodeLength = 1;
     private const string RelayCodeProperty = "rc";
-    private const float AutoRepeatDelay = 0.45f;
-    private const float AutoRepeatInterval = 0.18f;
     private const float StickDeadzone = 0.5f;
     private const float StickRepeatDelay = 0.35f;
     private const float StickRepeatInterval = 0.12f;
@@ -74,11 +67,9 @@ public class NetworkBootstrap : MonoBehaviour
     private VoiceBootstrap _voiceBootstrap;
     private bool _busy;
 
-    private InputState _inputState = InputState.Idle;
-    private readonly char[] _codeChars = { 'A', 'A', 'A' };
-    private int _slotIndex = 0;
-
-    private float _aHeldTime, _xHeldTime, _aNextRepeat, _xNextRepeat;
+    // One slot: the room is a single letter A-Z. Default 'A' so a fresh
+    // launch can host / join without the user touching anything.
+    private readonly char[] _codeChars = { 'A' };
 
     private bool _prevStickPos, _prevStickNeg;
     private float _stickPosHeld, _stickNegHeld;
@@ -142,17 +133,9 @@ public class NetworkBootstrap : MonoBehaviour
         PollController(XRNode.LeftHand,  ref _prevLPrimary, ref _prevLSecondary, OnLeftPrimary,  OnLeftSecondary);
         PollController(XRNode.RightHand, ref _prevRPrimary, ref _prevRSecondary, OnRightPrimary, OnRightSecondary);
 
-        if (_inputState == InputState.EditingCode)
-        {
-            UpdateAutoRepeat();
-            UpdateStickCycle();
-        }
-        else
-        {
-            _aHeldTime = _xHeldTime = _aNextRepeat = _xNextRepeat = 0f;
-            _stickPosHeld = _stickNegHeld = _stickPosNextRepeat = _stickNegNextRepeat = 0f;
-            _prevStickPos = _prevStickNeg = false;
-        }
+        // Stick cycles the room letter at any time — there's no separate
+        // "change room" mode. Default 'A' covers the no-touch case.
+        UpdateStickCycle();
     }
 
     void UpdateStickCycle()
@@ -178,8 +161,8 @@ public class NetworkBootstrap : MonoBehaviour
         if (active && !prev)
         {
             _lastButton = "RightHand stick";
-            _lastAction = delta > 0 ? "Stick: next letter" : "Stick: prev letter";
-            CycleSlot(delta);
+            _lastAction = delta > 0 ? "Stick: next room" : "Stick: prev room";
+            CycleLetter(delta);
             heldTime = 0f;
             nextRepeat = 0f;
         }
@@ -188,7 +171,7 @@ public class NetworkBootstrap : MonoBehaviour
             heldTime += Time.deltaTime;
             if (heldTime > StickRepeatDelay && heldTime - nextRepeat >= StickRepeatInterval)
             {
-                CycleSlot(delta);
+                CycleLetter(delta);
                 nextRepeat = heldTime;
             }
         }
@@ -200,74 +183,29 @@ public class NetworkBootstrap : MonoBehaviour
         prev = active;
     }
 
-    void UpdateAutoRepeat()
-    {
-        var rDev = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-        var lDev = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
-        bool aHeld = false, xHeld = false;
-        if (rDev.isValid) rDev.TryGetFeatureValue(CommonUsages.primaryButton, out aHeld);
-        if (lDev.isValid) lDev.TryGetFeatureValue(CommonUsages.primaryButton, out xHeld);
-
-        TickRepeat(aHeld, ref _aHeldTime, ref _aNextRepeat, () => CycleSlot(+1));
-        TickRepeat(xHeld, ref _xHeldTime, ref _xNextRepeat, () => CycleSlot(-1));
-    }
-
-    void TickRepeat(bool held, ref float heldTime, ref float nextRepeat, System.Action action)
-    {
-        if (!held) { heldTime = 0; nextRepeat = 0; return; }
-        heldTime += Time.deltaTime;
-        if (heldTime <= AutoRepeatDelay) return;
-        if (heldTime - nextRepeat >= AutoRepeatInterval)
-        {
-            action();
-            nextRepeat = heldTime;
-        }
-    }
-
     void OnLeftPrimary()
     {
-        if (_inputState == InputState.EditingCode) { _lastAction = "X: prev letter"; CycleSlot(-1); }
-        else { _lastAction = "X: host"; StartHost(); }
+        _lastAction = $"X: host room {CurrentLetter}";
+        StartHost();
     }
 
     void OnLeftSecondary()
     {
-        if (_inputState == InputState.EditingCode)
-        {
-            if (_slotIndex > 0)
-            {
-                _slotIndex--;
-                _lastAction = $"Y: prev slot → {_slotIndex + 1}";
-                _state = $"Slot {_slotIndex + 1} → {_codeChars[_slotIndex]}";
-            }
-            else { _lastAction = "Y: back"; _state = "Cancelled"; ExitCodeEditor(false); }
-        }
-        else { _lastAction = "Y: toggle mode"; ToggleMode(); }
+        _lastAction = "Y: toggle mode";
+        ToggleMode();
     }
 
     void OnRightPrimary()
     {
-        if (_inputState == InputState.EditingCode) { _lastAction = "A: next letter"; CycleSlot(+1); }
-        else { _lastAction = "A: recenter"; Recenter(); }
+        _lastAction = "A: recenter";
+        Recenter();
     }
 
     void OnRightSecondary()
     {
-        if (_inputState == InputState.EditingCode)
-        {
-            if (_slotIndex >= CodeLength - 1) { _lastAction = "B: join"; ExitCodeEditor(true); }
-            else
-            {
-                _slotIndex++;
-                _lastAction = $"B: next slot → {_slotIndex + 1}";
-                _state = $"Slot {_slotIndex + 1} → {_codeChars[_slotIndex]}";
-            }
-        }
-        else
-        {
-            if (mode == Mode.Lan) { _lastAction = "B: join LAN"; StartClient(); }
-            else { _lastAction = "B: enter code"; EnterCodeEditor(); }
-        }
+        if (mode == Mode.Lan) _lastAction = "B: join LAN";
+        else _lastAction = $"B: join room {CurrentLetter}";
+        StartClient();
     }
 
     void PollController(XRNode node, ref bool prevP, ref bool prevS, System.Action onPrimary, System.Action onSecondary)
@@ -319,54 +257,14 @@ public class NetworkBootstrap : MonoBehaviour
         _state = "Recentered";
     }
 
-    void EnterCodeEditor()
+    void CycleLetter(int delta)
     {
-        if (_busy) return;
-        _inputState = InputState.EditingCode;
-        _slotIndex = 0;
-        _state = "Enter code";
-    }
-
-    void ExitCodeEditor(bool startClient)
-    {
-        _inputState = InputState.Idle;
-        if (startClient)
-        {
-            _joinCodeInput = new string(_codeChars);
-            StartClient();
-        }
-    }
-
-    void CycleSlot(int delta)
-    {
-        char c = _codeChars[_slotIndex];
+        char c = _codeChars[0];
         int i = CodeAlphabet.IndexOf(c);
         if (i < 0) i = 0;
         i = ((i + delta) % CodeAlphabet.Length + CodeAlphabet.Length) % CodeAlphabet.Length;
-        _codeChars[_slotIndex] = CodeAlphabet[i];
-        _state = $"Slot {_slotIndex + 1} → {_codeChars[_slotIndex]}";
-    }
-
-    string FormatCode()
-    {
-        var sb = new StringBuilder(CodeLength * 4);
-        for (int i = 0; i < CodeLength; i++)
-        {
-            if (i > 0) sb.Append(' ');
-            if (i == _slotIndex && _inputState == InputState.EditingCode)
-                sb.Append('[').Append(_codeChars[i]).Append(']');
-            else
-                sb.Append(' ').Append(_codeChars[i]).Append(' ');
-        }
-        return sb.ToString();
-    }
-
-    static string GenerateAlias()
-    {
-        var sb = new StringBuilder(CodeLength);
-        for (int i = 0; i < CodeLength; i++)
-            sb.Append(CodeAlphabet[Random.Range(0, CodeAlphabet.Length)]);
-        return sb.ToString();
+        _codeChars[0] = CodeAlphabet[i];
+        _state = $"Room {_codeChars[0]}";
     }
 
     async void StartHost()
@@ -397,8 +295,11 @@ public class NetworkBootstrap : MonoBehaviour
             return;
         }
 
-        _hostedAlias = GenerateAlias();
-        _state = "Sharing code";
+        // Host advertises the current room letter (default 'A') as the
+        // human-facing alias. Voice room name and discovery property both
+        // key off this single letter.
+        _hostedAlias = CurrentRoom;
+        _state = "Sharing room";
         _voiceBootstrap?.JoinRoom(_hostedAlias);
 
         bool roomReady = false;
@@ -426,11 +327,12 @@ public class NetworkBootstrap : MonoBehaviour
         }
 
         if (_services == null || !_services.IsReady) { _state = "Signing in"; return; }
-        if (string.IsNullOrEmpty(_joinCodeInput)) { _state = "No code"; return; }
 
+        // Always join the currently selected room letter (default 'A').
+        _joinCodeInput = CurrentRoom;
         var alias = _joinCodeInput;
         _busy = true;
-        _state = "Looking for fire";
+        _state = $"Looking for room {alias}";
 
         _voiceBootstrap?.JoinRoom(alias);
 
@@ -467,7 +369,6 @@ public class NetworkBootstrap : MonoBehaviour
         _state = "Disconnected";
         _joinCodeInput = "";
         _hostedAlias = "";
-        _inputState = InputState.Idle;
     }
 
     bool ConfigureLanTransport()
@@ -492,18 +393,6 @@ public class NetworkBootstrap : MonoBehaviour
         _modeStyle.normal.textColor = new Color(0.85f, 0.85f, 0.85f, 0.6f);
     }
 
-    static string SpacedCode(string code)
-    {
-        if (string.IsNullOrEmpty(code)) return "";
-        var sb = new StringBuilder(code.Length * 2);
-        for (int i = 0; i < code.Length; i++)
-        {
-            if (i > 0) sb.Append(' ');
-            sb.Append(code[i]);
-        }
-        return sb.ToString();
-    }
-
     void OnGUI()
     {
         if (!Application.isEditor) return;
@@ -525,20 +414,27 @@ public class NetworkBootstrap : MonoBehaviour
         float topY = Screen.height * 0.18f;
         if (!string.IsNullOrEmpty(_hostedAlias))
         {
-            GUI.Label(new Rect(0, topY, w, 40), "CAMPFIRE CODE", _labelStyle);
+            GUI.Label(new Rect(0, topY, w, 40), "ROOM", _labelStyle);
             float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 1.5f);
             var prev = GUI.color;
             GUI.color = Color.Lerp(new Color(1f, 0.72f, 0.42f), new Color(1f, 0.88f, 0.62f), pulse);
-            GUI.Label(new Rect(0, topY + 50, w, 140), SpacedCode(_hostedAlias), _codeStyle);
+            GUI.Label(new Rect(0, topY + 50, w, 140), _hostedAlias, _codeStyle);
             GUI.color = prev;
+        }
+        else if (!connected)
+        {
+            GUI.Label(new Rect(0, topY, w, 40), "ROOM", _labelStyle);
+            GUI.Label(new Rect(0, topY + 50, w, 140), CurrentRoom, _codeStyle);
         }
 
         GUI.Label(new Rect(0, Screen.height * 0.70f, w, 40), _state, _stateStyle);
 
-        if (mode == Mode.Relay && Application.isEditor)
+        if (mode == Mode.Relay && Application.isEditor && !connected)
         {
-            GUI.Label(new Rect(20, 80, 220, 28), "Join code (editor):");
-            _joinCodeInput = (GUI.TextField(new Rect(240, 80, 120, 28), _joinCodeInput ?? "", CodeLength) ?? "").ToUpper();
+            GUI.Label(new Rect(20, 80, 220, 28), "Editor room override:");
+            var typed = (GUI.TextField(new Rect(240, 80, 60, 28), CurrentRoom, CodeLength) ?? "").ToUpper();
+            if (!string.IsNullOrEmpty(typed) && CodeAlphabet.IndexOf(typed[0]) >= 0)
+                _codeChars[0] = typed[0];
         }
     }
 

@@ -49,26 +49,24 @@ The package id is `com.unitymcplab.campfireroom`. Earlier installs (when the pro
 The overlay drives one of five states (idle, hosting, joining, connecting, connected). Look at the world-space `🔥` panel in front of the campfire — it always tells you what to do.
 
 1. **Pick a host.** Doesn't matter which; the experience is symmetric.
-2. **Host:** opens the app. Panel reads `🔥 CAMPFIRE` with the universal legend.
-   - If `mode · LAN` is shown at the bottom, press **left Y** to flip to Relay (the line should change to `mode · Relay`).
-   - Press **left X** to host. Panel switches to `🔥 YOUR FIRE`, then `Creating fire ...` (with cycling dots), then `Sharing code` and finally:
+2. **Host:** opens the app. Panel reads `🔥 CAMPFIRE` with `Room: A` under the headline and the universal legend.
+   - If `mode · Same Wi-Fi` is shown at the bottom, press **left Y** to flip to Internet (the line should change to `mode · Internet`).
+   - Press **left X** to host room A. Panel switches to `🔥 YOUR FIRE`, then `Creating fire ...` (with cycling dots), then `Sharing room` and finally:
      ```
      🔥  YOUR FIRE
-     share code
-     A B C
-     waiting for friend ...
+
+     Room: A
+
+     waiting for friend . . .
      ```
-3. **Host reads the 3-letter code out loud** over a phone call / Discord / SMS. The alphabet is only A/B/C, so 27 possible codes — repeat once if you suspect a misheard letter.
-4. **Guest:** opens the app, makes sure the bottom line reads `mode · Relay` (press **left Y** to toggle if not), then **right B** to enter the code editor. Panel switches to `🔥 JOIN FIRE` with three slots, the first one bracketed: `[A] B C`.
-5. **Guest enters the code.** No keyboard — it's all controller input:
-   - **Right thumbstick** to change the current letter (right or up = next, left or down = prev). A short flick changes one letter; holding the stick auto-cycles after ~0.35s.
-   - **Right B** advances to the next slot (the brackets jump to the next position) and, on the third slot, becomes "join".
-   - **Left Y** goes back a slot, or cancels back to idle from slot 1.
-   - **A / X buttons** are silent fallbacks if a stick isn't responding — A = next letter, X = prev.
-6. **Guest presses B on the last slot to join.** Panel switches to `🔥 CAMPFIRE` with `Joining fire ...` (cycling dots). Within a few seconds:
+3. **Host tells the guest which room** (default A) over a phone call / Discord / SMS. If you're the only pair testing, just say "we're on A" — that's the no-touch default. If two pairs are testing at the same time on the same Photon AppId, one pair nudges the **right thumbstick** to land on a different letter (B, C, ... up to Z) before hosting.
+4. **Guest:** opens the app, makes sure the bottom line reads `mode · Internet` (press **left Y** to toggle if not). The panel already shows `Room: A` by default.
+   - If the host is on a different letter (e.g. D), nudge the **right thumbstick** sideways to cycle the room until the panel reads `Room: D`. A short flick changes one letter; holding the stick auto-cycles after ~0.35s.
+   - When the letter matches, press **right B** to join. No edit mode, no slot picker — joining is one button on the displayed room.
+5. **Guest joins.** Panel reads `Joining room A . . .` (with the letter the guest selected), then `Joining fire ...`. Within a few seconds:
    - Guest sees a brief `🔥 Connected` notification, then the panel goes blank — the campfire is the focus.
    - Host sees `🔥 Friend joined` for ~5 seconds, then blank.
-7. **Voice handshake.** Photon Voice usually catches up within ~3 seconds of the NGO connection. Say *"can you hear me?"* — confirm voice both ways before continuing.
+6. **Voice handshake.** Photon Voice usually catches up within ~3 seconds of the NGO connection. Say *"can you hear me?"* — confirm voice both ways before continuing.
 
 If voice doesn't come through within ~5 seconds: there's no in-app disconnect button yet — quit to the system menu and relaunch on both sides. If it still doesn't, fall back to a phone call for this session and capture the failure in the retro.
 
@@ -165,8 +163,9 @@ Things we already know about. Not blockers for this test — just heads-ups so y
 - **No in-app version display.** You can't see which build you're running from inside VR. Confirm via `adb shell dumpsys package com.unitymcplab.campfireroom | grep versionName` if there's any doubt.
 - **No in-VR disconnect.** When you're done, press the Meta button and close from the dock. There's no "leave fire" button on the controller in this build.
 - **Y also toggles mode while connected.** If you accidentally press left Y mid-session it'll flip the mode label between Relay and LAN. It does *not* drop the existing connection — a follow-up slice will gate Y to idle-only.
-- **B/X also do something while hosting.** Pressing them while you're already hosting will try to start another action (B → enter code editor, X → re-attempt host). Mostly harmless but can produce confusing notifications. Just don't press them after the code is shared.
-- **27 possible codes.** ABC × 3 slots = only 27 combinations. Two simultaneous sessions could in theory collide on the same alias. For one paired session this is fine; we'll widen the alphabet when we have more concurrent users.
+- **B/X also do something while hosting.** Pressing them while you're already hosting will try to start another action (B → try to join your own room, X → re-attempt host). Mostly harmless but can produce confusing notifications. Just don't press them after the room is shared.
+- **26 possible rooms.** A–Z = 26 single-letter rooms. Two simultaneous sessions that both default to `A` will collide on the same alias. For one paired session this is fine; if multiple pairs are testing at once on the same Photon AppId, agree on different letters out of band.
+- **Stick can nudge the room letter accidentally.** A firm sideways flick of the right thumbstick in idle cycles the room. The panel always shows the current letter so it's recoverable, but be aware before you host.
 - **Emoji in the panel may render as `?` on Quest.** TextMesh uses the legacy Arial font, which sometimes lacks `🔥`. If the panels show boxes/question marks where fires should be, the rest of the UX still works — note it in the retro.
 - **Voice cuts out for 2–5 sec** — Photon Relay region hop or WiFi blip. Should recover automatically. Note the timestamp.
 - **Hand cubes float to weird positions** — happens when a controller lost tracking. Bring the controller back into view.

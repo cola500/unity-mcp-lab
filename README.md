@@ -95,7 +95,7 @@ Scene has `NetworkManager` (NGO + UnityTransport), `NetworkBootstrap`, and `Serv
 
 | Visible label | Internal | Use | How to start |
 |---|---|---|---|
-| **Internet** | `Relay` | two devices on different internet connections | Unity Relay free tier; 3-character ABC code shared out of band |
+| **Internet** | `Relay` | two devices on different internet connections | Unity Relay free tier; single-letter room code (A–Z, default A) shared out of band |
 | **Same Wi-Fi** | `Lan` | same Wi-Fi / same machine | direct IP — set `serverAddress` in the scene before building (effectively dev-only today; no runtime IP entry, no LAN discovery) |
 
 Default is **Same Wi-Fi** (`Mode.Lan` in the scene's serialized field). Toggle with **left Y** on Quest or **M** in the Editor.
@@ -114,15 +114,18 @@ There is currently **no Quest button bound to `Stop()`** — to leave a session 
 
 **Internet (Relay) flow:**
 
-1. On host (Quest): if the panel's bottom line reads `mode · Same Wi-Fi`, press **left Y** to flip to `mode · Internet`. Then press **left X** to host. The world-space panel switches to `🔥 YOUR FIRE` and walks `Creating fire ... → Sharing code → waiting for friend ...`. The 3-character ABC code appears in the middle of the panel, spaced apart (e.g. `A B C`).
-2. Share the 3-character code out of band (SMS, Discord) to the remote person.
-3. On client (Quest): make sure the bottom line reads `mode · Internet` (press **left Y** to toggle if not), then press **right B** to enter the code editor. The panel switches to `🔥 JOIN FIRE` with three slots, the first one bracketed: `[A] B C`. Cycle the current letter with the **right thumbstick** (a short flick changes one letter; hold to auto-cycle); A / X buttons work as silent fallbacks. **Right B** advances to the next slot and, on the third slot, becomes "join". **Left Y** goes back a slot, or cancels back to idle from slot 1.
-4. After B on the last slot, state walks `Looking for fire ... → Joining fire ... → Connected` and the host sees a brief `🔥 Friend joined` notification before the panel fades to blank. Head, hands, and presence breathing sync over Relay.
-5. **Stop:** no in-VR button. Quit the app from the Meta system menu.
+The room is a single letter A–Z. The panel always shows the current letter (default `A`) under the headline so host and join paths use the same room without any pickers or editor modes.
 
-The 3-character ABC code = 27 possible combinations. Acceptable for one paired test session; collision risk noted in `docs/remote-fika-test.md`.
+1. On host (Quest): if the panel's bottom line reads `mode · Same Wi-Fi`, press **left Y** to flip to `mode · Internet`. Then press **left X** to host room `A` (or whatever letter is currently shown). The world-space panel switches to `🔥 YOUR FIRE` and walks `Creating fire ... → Sharing room → waiting for friend ...`. The room letter is displayed mid-panel.
+2. Share the single letter out of band (SMS, Discord, "we're both on A").
+3. On client (Quest): make sure the bottom line reads `mode · Internet`, then press **right B** to join the displayed room. State walks `Looking for room A ... → Joining fire ... → Connected`. No edit mode, no slot navigation — joining is one button.
+4. To change room before host/join: nudge the **right thumbstick** sideways. The letter cycles A → B → ... → Z → A (and `Room: X` updates in the panel + the legend's `host room X` / `join room X` lines update with it). Both host and joiner have to land on the same letter — defaulting both to `A` means a fresh launch on both devices Just Works without anyone touching the stick.
+5. Host sees a brief `🔥 Friend joined` notification before the panel fades to blank. Head, hands, and presence breathing sync over Relay.
+6. **Stop:** no in-VR button. Quit the app from the Meta system menu.
 
-In the Editor, the same actions are bound to **M** / **H** / **C** / **X**; an extra "Join code (editor):" text field is shown so you can type without the world-space picker.
+A–Z = 26 possible rooms. Defaulting both sides to `A` is the no-touch path; if you need to deconflict (two pairs testing at once on the public Photon AppId), each pair picks a private letter.
+
+In the Editor, the same actions are bound to **M** / **H** / **C** / **X**; an extra "Editor room override:" text field is shown so you can type a different letter without using the stick.
 
 Unity Dashboard prerequisites: Authentication and Relay services must be Active for the project's `cloudProjectId`. Anonymous sign-in is automatic; no UI.
 

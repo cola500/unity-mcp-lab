@@ -1,4 +1,3 @@
-using System.Text;
 using UnityEngine;
 
 public class TutorialOverlay : MonoBehaviour
@@ -6,12 +5,6 @@ public class TutorialOverlay : MonoBehaviour
     [SerializeField] private TextMesh text;
     [SerializeField] private float billboardSmoothing = 8f;
     [SerializeField] private float notificationSeconds = 5f;
-
-    private const string UniversalLegend =
-        "X  host\n" +
-        "B  join / next / confirm\n" +
-        "Y  back / mode\n" +
-        "A  change / recenter";
 
     private NetworkBootstrap _net;
     private Camera _cam;
@@ -55,32 +48,17 @@ public class TutorialOverlay : MonoBehaviour
         string busySpinner = _net.IsBusy ? Spinner() : "";
         string notification = showNotification ? state + busySpinner : "";
 
+        char letter = _net.CurrentLetter;
+
         switch (_net.CurrentPhase)
         {
-            case NetworkBootstrap.Phase.Joining:
-            {
-                int last = _net.CodeLengthSlots - 1;
-                bool onLast = _net.CodeSlot >= last;
-                text.text =
-                    "🔥  JOIN FIRE\n" +
-                    "\n" +
-                    _net.CodeDisplay + "\n" +
-                    "\n" +
-                    (string.IsNullOrEmpty(notification) ? "" : notification + "\n\n") +
-                    "stick  change letter\n" +
-                    (onLast ? "B      join\n" : "B      next slot\n") +
-                    "Y      back";
-                break;
-            }
-
             case NetworkBootstrap.Phase.Hosting:
             {
                 string body;
                 if (!string.IsNullOrEmpty(_net.HostedAlias))
                 {
                     body =
-                        "share code\n" +
-                        SpaceLetters(_net.HostedAlias) + "\n" +
+                        $"Room: {_net.HostedAlias}\n" +
                         "\n" +
                         (string.IsNullOrEmpty(notification) ? "waiting for friend" + Spinner() : notification);
                 }
@@ -93,23 +71,19 @@ public class TutorialOverlay : MonoBehaviour
                 text.text =
                     "🔥  YOUR FIRE\n" +
                     "\n" +
-                    body + "\n" +
-                    "\n" +
-                    UniversalLegend;
+                    body;
                 break;
             }
 
             case NetworkBootstrap.Phase.Connecting:
             {
                 string body = string.IsNullOrEmpty(notification)
-                    ? "Joining fire" + Spinner()
+                    ? $"Joining room {letter}" + Spinner()
                     : notification;
                 text.text =
                     "🔥  CAMPFIRE\n" +
                     "\n" +
-                    body + "\n" +
-                    "\n" +
-                    UniversalLegend;
+                    body;
                 break;
             }
 
@@ -123,8 +97,9 @@ public class TutorialOverlay : MonoBehaviour
                 string modeLine = $"mode · {_net.CurrentModeLabel}";
                 text.text =
                     "🔥  CAMPFIRE\n" +
+                    $"Room: {letter}\n" +
                     "\n" +
-                    UniversalLegend + "\n" +
+                    BuildLegend(letter) + "\n" +
                     "\n" +
                     modeLine +
                     (string.IsNullOrEmpty(notification) ? "" : "\n" + notification);
@@ -132,6 +107,13 @@ public class TutorialOverlay : MonoBehaviour
             }
         }
     }
+
+    static string BuildLegend(char letter) =>
+        $"X       host room {letter}\n" +
+        $"B       join room {letter}\n" +
+        "Y       mode\n" +
+        "A       recenter\n" +
+        "stick   change room";
 
     static string Spinner()
     {
@@ -143,17 +125,5 @@ public class TutorialOverlay : MonoBehaviour
             case 3: return " . . .";
             default: return "";
         }
-    }
-
-    static string SpaceLetters(string code)
-    {
-        if (string.IsNullOrEmpty(code)) return "";
-        var sb = new StringBuilder(code.Length * 2);
-        for (int i = 0; i < code.Length; i++)
-        {
-            if (i > 0) sb.Append(' ');
-            sb.Append(code[i]);
-        }
-        return sb.ToString();
     }
 }
