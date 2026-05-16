@@ -66,6 +66,25 @@ Filename format: `campfirevr-log-YYYYMMDD-HHMMSS.jsonl` (one file per app launch
 
 Plug the Quest into your computer via USB-C, accept the Allow USB debugging popup if needed (see [install-on-quest.md](install-on-quest.md) Part A).
 
+### Quickest path — `scripts/pull-quest-logs.sh`
+
+```sh
+./scripts/pull-quest-logs.sh           # → quest-logs/YYYYMMDD-HHMMSS/
+./scripts/pull-quest-logs.sh --zip     # also produce quest-logs/campfirevr-logs-YYYYMMDD-HHMMSS.zip
+```
+
+The helper:
+
+- Locates adb (env `ADB`, then `PATH`, then Unity Hub's bundled adb).
+- Verifies exactly one Quest is connected + authorized, with friendly errors for the obvious failure modes (zero connected, multiple connected, popup not accepted, app never launched).
+- Pulls every log file from the device into a timestamped folder.
+- Writes a `README.txt` recording pull time, device serial, app version (from `dumpsys package`), source path, and the exact command used.
+- Optional `--zip` packages the folder for sending out of band.
+
+Doesn't delete anything on the headset, doesn't need Unity, doesn't need the project to be built. Send back either the unzipped folder or the zip.
+
+### Manual adb (the long form)
+
 ### Pull all logs from one headset
 
 ```sh

@@ -51,6 +51,26 @@ Run through [remote-fika-test.md](remote-fika-test.md) as normal. Layer in:
 
 ### Pull logs from both headsets
 
+Each tester runs this on their own machine and sends the resulting folder (or zip) back. From the repo root:
+
+```sh
+./scripts/pull-quest-logs.sh --zip
+```
+
+That produces `quest-logs/YYYYMMDD-HHMMSS/` (with a `README.txt` capturing device serial + app version) and a matching `campfirevr-logs-YYYYMMDD-HHMMSS.zip`. Send the zip — it's typically a few KB.
+
+If both headsets are testing, run the script once on each computer (one Quest at a time) and rename the resulting folder so the recipient can tell whose log is whose:
+
+```sh
+mv quest-logs/20260516-140728 quest-logs/20260516-140728-johan
+# or after zipping:
+mv quest-logs/campfirevr-logs-20260516-140728.zip quest-logs/johan-20260516-140728.zip
+```
+
+The script handles all the device-check + path resolution. Doesn't need Unity installed.
+
+### Pull logs manually (long form, if you prefer adb directly)
+
 Each tester does this on their own machine and shares the file. From the repo root:
 
 ```sh

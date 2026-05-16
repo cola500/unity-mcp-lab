@@ -62,6 +62,8 @@ cp docs/debug-logging.md     dist/friend-test/DEBUG-LOGS.md
 cp CHANGELOG.md              dist/friend-test/CHANGELOG.md
 ```
 
+`docs/debug-logging.md` (= `DEBUG-LOGS.md` in the zip) covers `scripts/pull-quest-logs.sh` for the developer side and a manual `adb pull` recipe for testers who only have Platform Tools. The pull-script is *not* something the tester runs inside their headset — it runs on the computer their Quest is plugged into, after a session, to extract the JSONL logs for sending back.
+
 Then write a short `dist/friend-test/README.md` (or copy + tweak the previous one) that:
 
 - Names the version: "This is `v0.1.3-suffix` — see CHANGELOG.md for what's new."
@@ -102,8 +104,8 @@ That's it. Share the zip out of band (Discord, AirDrop, Drive).
 
 If you forget which version a tester is running:
 
-1. Pull their debug log: `adb pull /sdcard/Android/data/com.unitymcplab.campfireroom/files/debug-logs/`.
-2. First line is the `app_started` event:
+1. Pull their debug log with `./scripts/pull-quest-logs.sh` (or the long-form adb command).
+2. First line of any `campfirevr-log-*.jsonl` is the `app_started` event:
    ```json
    {"ts":"2026-05-16T18:52:49.805","mono":4.78,"event":"app_started",
     "product_name":"CampfireVR","version":"1.0","platform":"Android",
