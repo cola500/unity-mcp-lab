@@ -65,7 +65,7 @@ The `EditingCode` input phase was removed. All bindings are now phase-independen
 | **Left Y** (left secondary) | Toggle mode LAN ⇄ Relay |
 | **Right thumbstick** | Cycle current room letter A↔Z (deadzone 0.5, repeat 0.35 s / 0.12 s). Always live. |
 
-There is **no in-headset binding that calls `Stop()`**. The `Stop()` method exists in `NetworkBootstrap` (line 459) but is only triggered by the **editor** `KeyCode.X` (line 137). On a Quest build, users must use the Meta system menu to quit the app to leave a session. This is documented in `docs/remote-fika-test.md` as a known rough edge.
+~~There is **no in-headset binding that calls `Stop()`**.~~ **[resolved in session-recovery slice]** — long-press **left Y** for ~1.5 s now calls `Stop()` from inside the headset. Short tap of Y still toggles mode (the press-edge action is delayed to release so the long-press can claim the press). See [docs/session-recovery-slice.md](session-recovery-slice.md).
 
 ### Room code **[updated: single-letter slice]**
 
@@ -229,7 +229,7 @@ In rough priority order:
 4. **Deduplicate Voice C/D/E in `docs/roadmap.md`** — remove the second copy that's listed as not-done.
 5. **Rename UI label `Relay → Internet`** in `TutorialOverlay.cs`. Keep `Mode.Relay` internally so we don't ripple through code. Example: `string ModeLabel(NetworkBootstrap.Mode m) => m == NetworkBootstrap.Mode.Relay ? "Internet" : "Same Wi-Fi";`.
 6. **Hide the LAN option from the user** (or gate Y mode-toggle to editor only) until LAN gets runtime IP entry. Right now picking LAN on a vanilla Quest install is a dead end.
-7. **Bind `Stop()` to a Quest button.** Suggestions in priority order:
+7. ~~**Bind `Stop()` to a Quest button.**~~ **[done in session-recovery slice — long-press left Y for 1.5 s]** Suggestions in priority order:
    - Long-press left Y (>1.5 s) → leave session. Keeps the existing short-press Y for mode toggle in idle.
    - Or: gate Y differently per phase — in Idle, Y = mode; in Connected/Hosting/Connecting, Y = leave.
 8. **Update the legend per phase** instead of "universal": Connected → no legend (already correct); Hosting/Connecting → just `A recenter / Y leave` once Stop is bound.

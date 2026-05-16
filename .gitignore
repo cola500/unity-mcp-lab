@@ -100,6 +100,11 @@ sysinfo.txt
 # pass; the docs that get bundled live in docs/ and are committed there.
 dist/
 
+# Debug logs pulled from the Quest via `adb pull`. Per-session artefacts —
+# may contain device names + timestamps from real test runs. Investigate
+# locally, share manually if relevant; don't track.
+quest-logs/
+
 # Visual Studio / Rider / IDE
 .vs/
 .idea/

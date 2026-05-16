@@ -55,6 +55,10 @@ public class NetworkBootstrap : MonoBehaviour
     private const float StickDeadzone = 0.5f;
     private const float StickRepeatDelay = 0.35f;
     private const float StickRepeatInterval = 0.12f;
+    // Long-press Y for this duration triggers an in-VR Stop. Short tap
+    // still toggles mode — we delay the ToggleMode to release-edge so we
+    // can suppress it if the press grew into a long-press.
+    private const float StopLongPressDuration = 1.5f;
 
     private string _joinCodeInput = "";
     private string _state = "Idle";
@@ -74,6 +78,14 @@ public class NetworkBootstrap : MonoBehaviour
     private bool _prevStickPos, _prevStickNeg;
     private float _stickPosHeld, _stickNegHeld;
     private float _stickPosNextRepeat, _stickNegNextRepeat;
+
+    // Y-button hold state for long-press Stop. _yHeldTime accumulates while
+    // Y is down; once it crosses StopLongPressDuration, we fire Stop() and
+    // mark _yConsumedByLongPress so the upcoming release-edge skips the
+    // normal ToggleMode action.
+    private bool _yHeld;
+    private float _yHeldTime;
+    private bool _yConsumedByLongPress;
 
     private GUIStyle _codeStyle;
     private GUIStyle _labelStyle;
@@ -137,12 +149,63 @@ public class NetworkBootstrap : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.L)) DebugLogger.Marker("editor_L");
         }
 
-        PollController(XRNode.LeftHand,  ref _prevLPrimary, ref _prevLSecondary, OnLeftPrimary,  OnLeftSecondary);
+        // LeftHand secondary (Y) is handled by PollYLongPress below — we
+        // need release-edge for the normal ToggleMode action so a long-press
+        // can claim the press without also firing the mode toggle.
+        PollController(XRNode.LeftHand,  ref _prevLPrimary, ref _prevLSecondary, OnLeftPrimary,  null);
         PollController(XRNode.RightHand, ref _prevRPrimary, ref _prevRSecondary, OnRightPrimary, OnRightSecondary);
+
+        PollYLongPress();
 
         // Stick cycles the room letter at any time — there's no separate
         // "change room" mode. Default 'A' covers the no-touch case.
         UpdateStickCycle();
+    }
+
+    // Y on the left controller: short tap = ToggleMode (as before); hold
+    // for >= StopLongPressDuration = Stop. Suppresses ToggleMode on release
+    // if Stop already fired during the hold.
+    void PollYLongPress()
+    {
+        var dev = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+        if (!dev.isValid)
+        {
+            _yHeld = false; _yHeldTime = 0f; _yConsumedByLongPress = false;
+            return;
+        }
+        dev.TryGetFeatureValue(CommonUsages.secondaryButton, out bool yNow);
+
+        if (yNow && !_yHeld)
+        {
+            // Press edge — start tracking; do not invoke ToggleMode yet.
+            _yHeld = true;
+            _yHeldTime = 0f;
+            _yConsumedByLongPress = false;
+        }
+        if (yNow)
+        {
+            _yHeldTime += Time.deltaTime;
+            if (!_yConsumedByLongPress && _yHeldTime >= StopLongPressDuration)
+            {
+                _yConsumedByLongPress = true;
+                _lastButton = "LeftHand secondary";
+                _lastAction = "Y long-press: stop session";
+                DebugLogger.Log("stop_requested", "Y long-press");
+                Stop();
+            }
+        }
+        else if (_yHeld)
+        {
+            // Release edge — only fire ToggleMode if it wasn't a long-press.
+            _yHeld = false;
+            if (!_yConsumedByLongPress)
+            {
+                _lastButton = "LeftHand secondary";
+                OnLeftSecondary();
+            }
+            _yHeldTime = 0f;
+            _yConsumedByLongPress = false;
+        }
     }
 
     void UpdateStickCycle()
@@ -210,6 +273,26 @@ public class NetworkBootstrap : MonoBehaviour
 
     void OnRightSecondary()
     {
+        // Guard against confusing "join while already hosting" — the Unity
+        // Services Multiplayer SDK throws SessionConflict ("player is already
+        // a member of the lobby") if a host presses B on their own room.
+        // Headset-observed regression in the 2026-05-16 fika test.
+        var nm = NetworkManager.Singleton;
+        if (nm != null && nm.IsHost)
+        {
+            _lastAction = "B: ignored (already hosting)";
+            _state = $"Already hosting Room {CurrentLetter}";
+            DebugLogger.Log("join_ignored_already_hosting", null, ("room", CurrentLetter.ToString()));
+            return;
+        }
+        if (mode == Mode.Relay && _services != null && _services.InRelaySession)
+        {
+            _lastAction = "B: ignored (already in session)";
+            _state = $"Already in Room {CurrentLetter}";
+            DebugLogger.Log("join_ignored_already_in_session", null, ("room", CurrentLetter.ToString()));
+            return;
+        }
+
         if (mode == Mode.Lan) _lastAction = "B: join LAN";
         else _lastAction = $"B: join room {CurrentLetter}";
         StartClient();
@@ -386,16 +469,36 @@ public class NetworkBootstrap : MonoBehaviour
 
     async void Stop()
     {
-        DebugLogger.Log("stop_pressed");
-        _voiceBootstrap?.LeaveRoom();
+        // Caller (long-press Y in-VR, X-key in Editor) already logged
+        // stop_requested with its source. Tear down voice → Relay → NGO in
+        // that order; each step swallows its own errors so a partial fail
+        // doesn't block the rest of the recovery.
+        bool clean = true;
+        try { _voiceBootstrap?.LeaveRoom(); }
+        catch (System.Exception e) { clean = false; DebugLogger.Log("stop_step_failed", "voice_leave", ("error", e.Message)); }
+
         if (_services != null && _services.InRelaySession)
-            await _services.LeaveRelayAsync();
+        {
+            try { await _services.LeaveRelayAsync(); }
+            catch (System.Exception e) { clean = false; DebugLogger.Log("stop_step_failed", "relay_leave", ("error", e.Message)); }
+        }
+
         var nm = NetworkManager.Singleton;
-        if (nm != null && (nm.IsHost || nm.IsClient)) nm.Shutdown();
-        _state = "Disconnected";
+        if (nm != null && (nm.IsHost || nm.IsClient))
+        {
+            try { nm.Shutdown(); }
+            catch (System.Exception e) { clean = false; DebugLogger.Log("stop_step_failed", "ngo_shutdown", ("error", e.Message)); }
+        }
+
+        // Reset local UI state but preserve the user's chosen room letter
+        // and mode so they don't have to re-pick when they host/join again.
         _joinCodeInput = "";
         _hostedAlias = "";
-        DebugLogger.Log("stopped");
+        _busy = false;
+
+        _state = "Stopped session";
+        DebugLogger.Log(clean ? "stop_completed" : "stop_completed_with_errors", null,
+            ("mode", mode.ToString()), ("room", CurrentLetter.ToString()));
     }
 
     bool ConfigureLanTransport()

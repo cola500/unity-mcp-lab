@@ -41,6 +41,8 @@ Run through [remote-fika-test.md](remote-fika-test.md) as normal. Layer in:
 
 - [ ] **When something feels off** — say "marker now" out loud, and if you're testing from the Editor, hit the **L key** to write a `MANUAL_MARKER` event. (In-VR marker button isn't bound yet — verbal markers are the workflow until that exists.)
 
+- [ ] **If a session gets stuck** (frozen connection, can't host/join, "Already hosting" loop) — **long-press left Y for ~1.5 seconds** to call `Stop()` cleanly. Logs will show `stop_requested → stop_completed`. Wait 1–2 seconds, then re-host or re-join. Your room letter + mode are preserved across the stop.
+
 - [ ] **When voice cuts out** — note the wall-clock time and what was happening. Don't tinker with controls; let the session run so the logs capture the recovery (or non-recovery) cleanly.
 
 - [ ] **If one side crashes** — the other side stays in. Note what the surviving side saw (panel state, blank, magenta…) before relaunching the crashed side.
