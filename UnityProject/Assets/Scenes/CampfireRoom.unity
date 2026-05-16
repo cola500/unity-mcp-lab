@@ -12717,6 +12717,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1674533041}
   - component: {fileID: 1674533042}
+  - component: {fileID: 1674533043}
   m_Layer: 0
   m_Name: OakWindController
   m_TagString: Untagged
@@ -12751,7 +12752,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 60bc5f3d16a5ecd45b1350b99c4a0b1d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: ALP8310_ControllerGlobal::ALP8310Controller
-  windZone: {fileID: 0}
+  windZone: {fileID: 1674533043}
   SynchWindZone: 0
   SynchTheVegetationEngine: 0
   SynchMicrosplat: 0
@@ -12759,13 +12760,31 @@ MonoBehaviour:
   WindDirection: 0
   FadeWindDistanceMode: 0
   FadeWindDistanceBias: 0
-  WindPulse: 0.3
+  WindPulse: 0.1
   WindTurbulence: 0.12
   WindRandomness: 0.15
   BillboardWindEnabled: 1
   BillboardWindIntensity: 0.06
-  foldouts: 
-  guiContent: []
+  foldouts: 01000000
+  guiContent:
+  - m_Text: Wind
+    m_Image: {fileID: 0}
+    m_Tooltip: Click here to open Wind settings
+    m_TextWithWhitespace: "Wind\u200B"
+--- !u!182 &1674533043
+WindZone:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1674533040}
+  m_Enabled: 1
+  m_Mode: 0
+  m_Radius: 20
+  m_WindMain: 1
+  m_WindTurbulence: 1
+  m_WindPulseMagnitude: 0.5
+  m_WindPulseFrequency: 0.01
 --- !u!1 &1683026954
 GameObject:
   m_ObjectHideFlags: 0
