@@ -8,9 +8,11 @@
 # USB-connected Quest.
 #
 # Usage:
-#   ./scripts/build-quest.sh                # build only
-#   ./scripts/build-quest.sh --install      # build + adb install -r
-#   ./scripts/build-quest.sh --launch       # build + install + monkey-launch
+#   ./scripts/build-quest.sh                            # build only
+#   ./scripts/build-quest.sh --install                  # build + adb install -r
+#   ./scripts/build-quest.sh --launch                   # build + install + monkey-launch
+#   ./scripts/build-quest.sh --install-only             # skip build, install existing APK
+#   ./scripts/build-quest.sh --install-only --launch    # skip build, install + launch
 #   ./scripts/build-quest.sh --help
 #
 # Requirements:
@@ -44,70 +46,84 @@ LAUNCH_ACTIVITY="${PACKAGE_ID}/com.unity3d.player.UnityPlayerGameActivity"
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0") [--install] [--launch] [--help]
+Usage: $(basename "$0") [--install] [--launch] [--install-only] [--help]
 
 Builds CampfireVR APK via Unity batchmode. Wraps
 Tools/Quest Setup/Build Remote Fika APK from QuestBuildAPK.cs.
 
 Options:
-  --install   adb install -r the built APK onto the first connected Quest
-  --launch    adb monkey-launch the app after install (implies --install)
-  -h, --help  show this message
+  --install        adb install -r the built APK onto the first connected Quest
+  --launch         adb monkey-launch the app after install (implies --install)
+  --install-only   skip the Unity build; install the existing APK at the
+                   configured output path. Combine with --launch to also boot
+                   the app. Fails if no APK has been built yet.
+  -h, --help       show this message
 
 Env:
   UNITY_VERSION   Unity Editor version (default: 6000.4.7f1)
 EOF
 }
 
+SKIP_BUILD=0
 INSTALL=0
 LAUNCH=0
 for arg in "$@"; do
     case "$arg" in
-        --install) INSTALL=1 ;;
-        --launch)  INSTALL=1; LAUNCH=1 ;;
-        -h|--help) usage; exit 0 ;;
+        --install)      INSTALL=1 ;;
+        --launch)       INSTALL=1; LAUNCH=1 ;;
+        --install-only) SKIP_BUILD=1; INSTALL=1 ;;
+        -h|--help)      usage; exit 0 ;;
         *) echo "Unknown arg: $arg" >&2; usage >&2; exit 1 ;;
     esac
 done
 
-if [[ ! -x "$UNITY" ]]; then
-    echo "Unity not found at $UNITY" >&2
-    echo "Set UNITY_VERSION env to the installed Editor version." >&2
-    exit 2
-fi
-if [[ ! -d "$PROJECT_PATH" ]]; then
-    echo "Project not found at $PROJECT_PATH" >&2
-    exit 2
-fi
+if [[ $SKIP_BUILD -eq 0 ]]; then
+    if [[ ! -x "$UNITY" ]]; then
+        echo "Unity not found at $UNITY" >&2
+        echo "Set UNITY_VERSION env to the installed Editor version." >&2
+        exit 2
+    fi
+    if [[ ! -d "$PROJECT_PATH" ]]; then
+        echo "Project not found at $PROJECT_PATH" >&2
+        exit 2
+    fi
 
-echo "[build] Unity ${UNITY_VERSION} → ${APK_PATH#"${REPO_ROOT}/"}"
-echo "[build] (Close the Editor first if CampfireVR is open in the GUI.)"
+    echo "[build] Unity ${UNITY_VERSION} → ${APK_PATH#"${REPO_ROOT}/"}"
+    echo "[build] (Close the Editor first if CampfireVR is open in the GUI.)"
 
-# Capture previous APK mtime so we can verify the build actually wrote a new
-# file (Unity sometimes exits 0 even when BuildResult is Failed — the only
-# reliable signal is the APK timestamp).
-PREV_MTIME=0
-[[ -f "$APK_PATH" ]] && PREV_MTIME=$(stat -f %m "$APK_PATH")
+    # Capture previous APK mtime so we can verify the build actually wrote a
+    # new file (Unity sometimes exits 0 even when BuildResult is Failed — the
+    # only reliable signal is the APK timestamp).
+    PREV_MTIME=0
+    [[ -f "$APK_PATH" ]] && PREV_MTIME=$(stat -f %m "$APK_PATH")
 
-"$UNITY" \
-    -batchmode \
-    -nographics \
-    -projectPath "$PROJECT_PATH" \
-    -buildTarget Android \
-    -executeMethod QuestBuildAPK.Build \
-    -quit \
-    -logFile -
+    "$UNITY" \
+        -batchmode \
+        -nographics \
+        -projectPath "$PROJECT_PATH" \
+        -buildTarget Android \
+        -executeMethod QuestBuildAPK.Build \
+        -quit \
+        -logFile -
 
-if [[ ! -f "$APK_PATH" ]]; then
-    echo "[build] APK not produced at $APK_PATH" >&2
-    exit 3
+    if [[ ! -f "$APK_PATH" ]]; then
+        echo "[build] APK not produced at $APK_PATH" >&2
+        exit 3
+    fi
+    NEW_MTIME=$(stat -f %m "$APK_PATH")
+    if [[ "$NEW_MTIME" == "$PREV_MTIME" ]]; then
+        echo "[build] APK timestamp unchanged — Unity reported success but didn't write a new build" >&2
+        exit 3
+    fi
+    echo "[build] OK · $(du -h "$APK_PATH" | cut -f1) · ${APK_PATH#"${REPO_ROOT}/"}"
+else
+    if [[ ! -f "$APK_PATH" ]]; then
+        echo "[install-only] No APK at $APK_PATH" >&2
+        echo "[install-only] Run without --install-only first to produce a build." >&2
+        exit 3
+    fi
+    echo "[install-only] Using existing APK · $(du -h "$APK_PATH" | cut -f1) · built $(stat -f %Sm "$APK_PATH") · ${APK_PATH#"${REPO_ROOT}/"}"
 fi
-NEW_MTIME=$(stat -f %m "$APK_PATH")
-if [[ "$NEW_MTIME" == "$PREV_MTIME" ]]; then
-    echo "[build] APK timestamp unchanged — Unity reported success but didn't write a new build" >&2
-    exit 3
-fi
-echo "[build] OK · $(du -h "$APK_PATH" | cut -f1) · ${APK_PATH#"${REPO_ROOT}/"}"
 
 if [[ $INSTALL -eq 1 ]]; then
     if [[ ! -x "$ADB" ]]; then

@@ -82,12 +82,17 @@ Networking model: each peer spawns a `PlayerHead` prefab on connect. Owner-autho
 
 ```sh
 # Plug in the Quest, then from the repo root:
-./scripts/build-quest.sh --launch     # build + adb install -r + monkey-launch
-./scripts/build-quest.sh --install    # build + adb install -r (don't auto-launch)
-./scripts/build-quest.sh              # build only (APK lands in UnityProject/Builds/)
+./scripts/build-quest.sh --launch                # build + adb install -r + monkey-launch
+./scripts/build-quest.sh --install               # build + adb install -r (don't auto-launch)
+./scripts/build-quest.sh                         # build only (APK lands in UnityProject/Builds/)
+
+# Re-deploy the most-recent APK without rebuilding (useful after a Quest reboot
+# or to share the same build to a second headset):
+./scripts/build-quest.sh --install-only --launch # skip build, install + launch
+./scripts/build-quest.sh --install-only          # skip build, install only
 ```
 
-The script wraps `Tools/Quest Setup/Build Remote Fika APK` (`QuestBuildAPK.Build`) in Unity batchmode, so you don't need to open the Editor. **Close the Editor first** if CampfireVR is open — Unity can't acquire the project lock from batchmode if the GUI is editing the same project.
+The script wraps `Tools/Quest Setup/Build Remote Fika APK` (`QuestBuildAPK.Build`) in Unity batchmode, so you don't need to open the Editor. **Close the Editor first** if CampfireVR is open — Unity can't acquire the project lock from batchmode if the GUI is editing the same project. (`--install-only` skips the build entirely so the Editor can stay open.)
 
 Manual fallback (if the script isn't an option):
 
