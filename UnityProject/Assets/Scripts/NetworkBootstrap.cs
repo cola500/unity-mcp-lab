@@ -95,6 +95,10 @@ public class NetworkBootstrap : MonoBehaviour
             nm.OnClientConnectedCallback += OnClientConnected;
             nm.OnClientDisconnectCallback += OnClientDisconnected;
         }
+        DebugLogger.Log("network_bootstrap_ready", null,
+            ("mode", mode.ToString()),
+            ("room", CurrentLetter.ToString()),
+            ("scene", UnityEngine.SceneManagement.SceneManager.GetActiveScene().name));
     }
 
     void OnDestroy()
@@ -113,21 +117,24 @@ public class NetworkBootstrap : MonoBehaviour
         if (nm == null) return;
         if (nm.IsHost && id != nm.LocalClientId) _state = "Friend joined";
         else if (nm.IsClient && id == nm.LocalClientId) _state = "Connected";
+        DebugLogger.Log("client_connected", null, ("id", (long)id), ("role", nm.IsHost ? "host" : "client"));
     }
 
     void OnClientDisconnected(ulong id)
     {
         _state = "Friend left";
+        DebugLogger.Log("client_disconnected", null, ("id", (long)id));
     }
 
     void Update()
     {
         if (Application.isEditor)
         {
-            if (Input.GetKeyDown(KeyCode.H)) StartHost();
-            if (Input.GetKeyDown(KeyCode.C)) StartClient();
-            if (Input.GetKeyDown(KeyCode.X)) Stop();
-            if (Input.GetKeyDown(KeyCode.M)) ToggleMode();
+            if (Input.GetKeyDown(KeyCode.H)) { DebugLogger.Log("editor_key", "H"); StartHost(); }
+            if (Input.GetKeyDown(KeyCode.C)) { DebugLogger.Log("editor_key", "C"); StartClient(); }
+            if (Input.GetKeyDown(KeyCode.X)) { DebugLogger.Log("editor_key", "X"); Stop(); }
+            if (Input.GetKeyDown(KeyCode.M)) { DebugLogger.Log("editor_key", "M"); ToggleMode(); }
+            if (Input.GetKeyDown(KeyCode.L)) DebugLogger.Marker("editor_L");
         }
 
         PollController(XRNode.LeftHand,  ref _prevLPrimary, ref _prevLSecondary, OnLeftPrimary,  OnLeftSecondary);
@@ -247,6 +254,7 @@ public class NetworkBootstrap : MonoBehaviour
     {
         mode = (mode == Mode.Lan) ? Mode.Relay : Mode.Lan;
         _state = $"Mode · {CurrentModeLabel}";
+        DebugLogger.Log("mode_changed", null, ("mode", mode.ToString()));
     }
 
     void Recenter()
@@ -255,6 +263,7 @@ public class NetworkBootstrap : MonoBehaviour
         SubsystemManager.GetSubsystems(subs);
         foreach (var s in subs) s.TryRecenter();
         _state = "Recentered";
+        DebugLogger.Log("recenter");
     }
 
     void CycleLetter(int delta)
@@ -265,35 +274,42 @@ public class NetworkBootstrap : MonoBehaviour
         i = ((i + delta) % CodeAlphabet.Length + CodeAlphabet.Length) % CodeAlphabet.Length;
         _codeChars[0] = CodeAlphabet[i];
         _state = $"Room {_codeChars[0]}";
+        DebugLogger.Log("room_changed", null, ("room", _codeChars[0].ToString()));
     }
 
     async void StartHost()
     {
         if (_busy) return;
+        DebugLogger.Log("host_pressed", null, ("mode", mode.ToString()), ("room", CurrentLetter.ToString()));
         if (mode == Mode.Lan)
         {
             _state = "Lighting LAN fire";
-            if (!ConfigureLanTransport()) return;
+            DebugLogger.Log("lan_host_attempt", null, ("address", serverAddress), ("port", (int)port));
+            if (!ConfigureLanTransport()) { DebugLogger.Log("lan_host_failed", "transport-config"); return; }
             if (NetworkManager.Singleton.StartHost())
             {
                 _state = "Waiting for friend";
                 _voiceBootstrap?.JoinRoom(LanRoomName);
+                DebugLogger.Log("lan_host_ready");
             }
-            else _state = "Host failed";
+            else { _state = "Host failed"; DebugLogger.Log("lan_host_failed", "StartHost-returned-false"); }
             return;
         }
 
-        if (_services == null || !_services.IsReady) { _state = "Signing in"; return; }
+        if (_services == null || !_services.IsReady) { _state = "Signing in"; DebugLogger.Log("relay_host_blocked", "services-not-ready"); return; }
         _busy = true;
         _state = "Creating fire";
+        DebugLogger.Log("relay_host_attempt", null, ("room", CurrentLetter.ToString()));
 
         var realCode = await _services.HostRelayAsync();
         if (string.IsNullOrEmpty(realCode))
         {
             _busy = false;
             _state = "Couldn't start fire";
+            DebugLogger.Log("relay_alloc_failed");
             return;
         }
+        DebugLogger.Log("relay_alloc_succeeded");
 
         // Host advertises the current room letter (default 'A') as the
         // human-facing alias. Voice room name and discovery property both
@@ -308,31 +324,36 @@ public class NetworkBootstrap : MonoBehaviour
 
         _busy = false;
         _state = roomReady ? "Waiting for friend" : "Voice room failed";
+        DebugLogger.Log(roomReady ? "relay_host_ready" : "relay_host_voice_failed");
     }
 
     async void StartClient()
     {
         if (_busy) return;
+        DebugLogger.Log("join_pressed", null, ("mode", mode.ToString()), ("room", CurrentLetter.ToString()));
         if (mode == Mode.Lan)
         {
             _state = "Joining fire";
-            if (!ConfigureLanTransport()) return;
+            DebugLogger.Log("lan_join_attempt", null, ("address", serverAddress), ("port", (int)port));
+            if (!ConfigureLanTransport()) { DebugLogger.Log("lan_join_failed", "transport-config"); return; }
             if (NetworkManager.Singleton.StartClient())
             {
                 _state = "Joining fire";
                 _voiceBootstrap?.JoinRoom(LanRoomName);
+                DebugLogger.Log("lan_join_started");
             }
-            else _state = "Join failed";
+            else { _state = "Join failed"; DebugLogger.Log("lan_join_failed", "StartClient-returned-false"); }
             return;
         }
 
-        if (_services == null || !_services.IsReady) { _state = "Signing in"; return; }
+        if (_services == null || !_services.IsReady) { _state = "Signing in"; DebugLogger.Log("relay_join_blocked", "services-not-ready"); return; }
 
         // Always join the currently selected room letter (default 'A').
         _joinCodeInput = CurrentRoom;
         var alias = _joinCodeInput;
         _busy = true;
         _state = $"Looking for room {alias}";
+        DebugLogger.Log("relay_join_attempt", null, ("room", alias));
 
         _voiceBootstrap?.JoinRoom(alias);
 
@@ -342,6 +363,7 @@ public class NetworkBootstrap : MonoBehaviour
         {
             _busy = false;
             _state = "No fire found";
+            DebugLogger.Log("relay_join_voice_timeout", null, ("room", alias));
             return;
         }
 
@@ -350,17 +372,21 @@ public class NetworkBootstrap : MonoBehaviour
         {
             _busy = false;
             _state = "Host's code missing";
+            DebugLogger.Log("relay_join_property_missing", null, ("room", alias));
             return;
         }
 
         _state = "Joining fire";
+        DebugLogger.Log("relay_join_calling");
         bool ok = await _services.JoinRelayAsync(realCode);
         _busy = false;
-        if (!ok) _state = "Couldn't reach fire";
+        if (!ok) { _state = "Couldn't reach fire"; DebugLogger.Log("relay_join_failed"); }
+        else DebugLogger.Log("relay_join_succeeded");
     }
 
     async void Stop()
     {
+        DebugLogger.Log("stop_pressed");
         _voiceBootstrap?.LeaveRoom();
         if (_services != null && _services.InRelaySession)
             await _services.LeaveRelayAsync();
@@ -369,6 +395,7 @@ public class NetworkBootstrap : MonoBehaviour
         _state = "Disconnected";
         _joinCodeInput = "";
         _hostedAlias = "";
+        DebugLogger.Log("stopped");
     }
 
     bool ConfigureLanTransport()

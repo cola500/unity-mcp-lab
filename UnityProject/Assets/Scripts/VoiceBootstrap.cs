@@ -12,6 +12,7 @@ public class VoiceBootstrap : MonoBehaviour
     private string _status = "Voice: idle";
     private string _pendingRoom;
     private bool _inRoom;
+    private ClientState _lastLoggedState = ClientState.PeerCreated;
 
     public bool InRoom => _inRoom;
     public string CurrentRoomName => _voice?.Client?.CurrentRoom?.Name ?? "";
@@ -28,6 +29,7 @@ public class VoiceBootstrap : MonoBehaviour
 
         _voice.ConnectUsingSettings();
         _status = "Voice: connecting…";
+        DebugLogger.Log("voice_connect_attempt");
     }
 
     void Update()
@@ -35,6 +37,13 @@ public class VoiceBootstrap : MonoBehaviour
         if (_voice == null || _voice.Client == null) return;
 
         var state = _voice.Client.State;
+
+        // Only log on state transitions, never every frame.
+        if (state != _lastLoggedState)
+        {
+            DebugLogger.Log("voice_state", null, ("state", state.ToString()));
+            _lastLoggedState = state;
+        }
 
         if (state == ClientState.ConnectedToMasterServer && !string.IsNullOrEmpty(_pendingRoom))
         {
@@ -46,6 +55,7 @@ public class VoiceBootstrap : MonoBehaviour
 
         if (state == ClientState.Joined)
         {
+            if (!_inRoom) DebugLogger.Log("voice_joined", null, ("room", _voice.Client.CurrentRoom?.Name ?? ""));
             _inRoom = true;
             _status = $"Voice connected ({_voice.Client.CurrentRoom?.Name})";
         }
@@ -55,9 +65,11 @@ public class VoiceBootstrap : MonoBehaviour
             {
                 _inRoom = false;
                 _status = "Voice: left room";
+                DebugLogger.Log("voice_left_room");
             }
             else if (state == ClientState.Disconnected)
             {
+                if (_inRoom) DebugLogger.Log("voice_disconnected_while_in_room");
                 _inRoom = false;
                 _status = "Voice: disconnected";
             }
@@ -93,12 +105,17 @@ public class VoiceBootstrap : MonoBehaviour
         };
         _voice.Client.OpJoinOrCreateRoom(enterRoomParams);
         _status = $"Voice room joining… ({roomName})";
+        DebugLogger.Log("voice_room_join_attempt", null, ("room", roomName));
     }
 
     public void LeaveRoom()
     {
         if (_voice == null || _voice.Client == null) return;
-        if (_inRoom) _voice.Client.OpLeaveRoom(false);
+        if (_inRoom)
+        {
+            _voice.Client.OpLeaveRoom(false);
+            DebugLogger.Log("voice_room_leave_requested");
+        }
         _pendingRoom = null;
     }
 
