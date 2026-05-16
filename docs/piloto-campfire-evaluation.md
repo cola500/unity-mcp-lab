@@ -73,8 +73,9 @@ What this means for our project:
 
 **Decided:**
 - **No scene change.** The scene file is untouched.
-- **Keep the imports in place** for now. They're inside the gitignored `Assets/Piloto Studio/` folder, so they don't pollute the repo. They do produce shader compile errors in the Editor console — annoying but not breaking anything (the build doesn't reference these materials, only the Editor tries to compile the unused shaders). If the noise becomes a problem, manually delete `Assets/Piloto Studio/Shaders/` and the errors go away. Re-import via the menu if needed.
-- **Keep the importer script** (`Editor/PilotoShadersImporter.cs`) as a one-click way to re-establish this state in the future, with a clear comment about the HDRP incompatibility so it's not invoked blindly.
+- **Keep the importer script** (`Editor/PilotoShadersImporter.cs`) as a one-click way to re-import the unitypackage in the future, with a clear comment about the HDRP incompatibility so it's not invoked blindly.
+
+**Followed up: shader import deleted (2026-05-16).** The shader compile errors filling the Editor console were silenced by removing `Assets/Piloto Studio/Shaders/` (and `Shaders.meta`). The other Piloto Studio subfolders (`Campfire And Torches Pack/`, `Materials/`, `Models/`, `Readme/`, `Textures/`, the asset-store PDF) were left in place — they don't compile shaders and don't error on import on their own. The materials under `Materials/Fire/` and `Materials/Shared/` will show as "missing shader" in the Project window if inspected (they reference the deleted UberFX GUID), but they are not in the scene, so they have no rendering or build impact. Re-importing is one menu click away if a future slice wants the pack back.
 
 ## Recommendation: stay on the current campfire
 
