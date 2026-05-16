@@ -46,7 +46,9 @@ Thumb sphere        pos (±0.045, 0.005, 0.020) scale (0.030, 0.028, 0.045)
                     rot (15°, ±30°, ∓8°)
   Sphere (not capsule) for the rounded mitten thumb compartment.
   Position + rotation flips sign with `thumbSide` — left hand's thumb
-  is on +X, right hand's is on -X.
+  is on +X (inward toward body center when controller is held naturally),
+  right hand's is on -X (also inward). Headset-validated; see "Thumb
+  direction — what actually reads right" below.
 
 Cuff cylinder       pos (0, 0, -0.050)         scale (0.078, 0.014, 0.078)
                     rot (90°, 0°, 0°)
@@ -126,6 +128,79 @@ If the headset test reads the local mittens as a clear win, the trivial-share ex
 - Scene post-save: `LeftMittenHand` (1 ref), `RightMittenHand` (1 ref), `MittenWarm.mat` (2 refs — both hands). XRHeadTracker (3 refs) and XRControllerInputFeedback (2 refs) intact.
 - Old `HandsControllerMesh.asset` + `HandController.mat` still on disk for fallback.
 - Console clean after the helper run.
+
+## Thumb direction — what actually reads right
+
+Headset-validated. The original `thumbSide` mapping (`+1` for left, `-1` for right → thumbs on the **inner** side of each mitten, pointing toward the body's centerline) is the one that reads correctly in VR.
+
+An interim attempt swapped the signs based on a misreading of the user's first bug report ("left mitten on right hand and vice versa"). The hypothesis was that the Quest grip-pose `+X` convention put thumbs on the wrong axis, so flipping `thumbSide` would correct the mirror. Headset test of that flipped state rejected it explicitly: with thumbs now sticking **outward** (away from the body), the mittens read as wrong-handed. Reverted to the original `+1`/`-1` mapping.
+
+The lesson: don't reason about Quest controller axis conventions from first principles. The grip-pose `+X` direction relative to "what the user perceives as their thumb side" depends on Unity's XR backend, the controller model, *and* the -45° X pitch later applied to the mesh — they compose. The only reliable validation is putting it on and looking.
+
+What was NOT touched during either attempt or the revert:
+- `LeftHandAnchor` / `RightHandAnchor` transforms or `XRHeadTracker.node` values
+- `XRControllerInputFeedback` (still auto-binds to `transform.GetChild(0)`)
+- `LeftHandMesh` / `RightHandMesh` GameObject parenting, scale, or rotation
+- `MittenWarm.mat`, `HandsControllerMesh.asset`, `HandController.mat`, or any fallback path
+- `PlayerHead.prefab` (remote avatars still on the controller-mesh look)
+
+If a future tester reports the mittens read wrong again, **before changing `thumbSide`**: check whether the `XRHeadTracker.node` field on each anchor is still `LeftHand`/`RightHand`, that scene parenting is unchanged, and that the -45° X pitch on each mesh (see "Final headset-validated grip alignment" below) hasn't drifted to zero. Only after all three are confirmed should `thumbSide` come back into question.
+
+## Grip pose alignment polish
+
+Headset test of the procedurally-generated mittens revealed a separate alignment issue from the thumb-direction question: the mittens read as **pistols aiming forward**. The mesh's local +Z (documented in the authoring frame as "pointing direction") was aligning with the tracked controller's pointer ray and rendering the mittens like rigid weapons protruding from the wrists rather than relaxed hands wrapped around a controller.
+
+The Quest Touch controller is a vertical-grip device — when held naturally with your arm at rest, the controller body extends roughly upward from your fist. The device pose Unity returns (via `InputDevices.GetDeviceAtXRNode`) tracks this orientation directly, so a mesh authored with its local +Z aligned to "controller pointer direction" extends along the controller's long axis. Without a wrist-flex offset, the mesh extends the controller's geometry forward rather than wrapping around it.
+
+The fix is a local-rotation offset on the visual children only — the XR anchors that drive tracking are left untouched. See "Final headset-validated grip alignment" below for the values that landed.
+
+### Attempts that were rejected in headset
+
+1. **`(0°, 0°, 0°)`** — no offset. The original "pistol aiming forward" state that triggered the slice.
+2. **`(+45°, ±8°, 0°)`** — pitching *forward* (toward where the palm faces). The intuition was "fingers curl down toward the lap"; in headset this folded the mittens into / under the controller body so they read as broken wrists rather than relaxed hands.
+3. **Final: `(-45°, ±8°, 0°)`** — pitching *backward* (away from the palm) instead, so the mittens curl back over the knuckles. Headset-validated.
+
+The two-attempt path matters because it shows the wrist-flex direction was the non-obvious bit, not the magnitude. ±45° was the right scale either way; only the sign needed the headset to disambiguate. Documented here so a future polish iteration doesn't re-derive the wrong direction.
+
+### Why this is NOT a hand-assignment fix
+
+The XR wiring (anchor → `XRHeadTracker.node`, scene parenting, mesh asset assignment routed by GameObject name) is structurally correct and was validated when the [thumb direction question](#thumb-direction--what-actually-reads-right) was resolved. This polish is purely a **visual offset on the mesh transform** — applied to the same `LeftHandMesh` / `RightHandMesh` GameObjects, not to anchors, not to mesh assets, not to `thumbSide`, not to anchor `XRNode` selection.
+
+### What was NOT touched
+
+- `LeftHandAnchor` / `RightHandAnchor` transforms or `XRHeadTracker.node` values
+- Mitten mesh geometry (`LeftMittenHand.asset` / `RightMittenHand.asset` byte-identical to pre-polish)
+- `MittenWarm.mat`, `HandsControllerMesh.asset`, `HandController.mat`, or any fallback path
+- `MittenHandsSetup.cs` (mesh-generation logic, including the headset-validated `thumbSide` mapping)
+- `XRControllerInputFeedback` (trigger-press scale pulse continues to operate)
+- `PlayerHead.prefab` (remote avatars still on the controller-mesh look, no rotation offset baked in)
+- Networking, voice, session, room, or input bindings
+
+## Final headset-validated grip alignment
+
+These are the live values in `Assets/Scenes/CampfireRoom.unity` after iterative headset tuning. Source of truth for any future regression check.
+
+| Field | `LeftHandMesh` | `RightHandMesh` |
+|---|---|---|
+| `localPosition` | `(0, 0, 0)` | `(0, 0, 0)` |
+| `localEulerAngles` | `(-45°, +8°, 0°)` | `(-45°, -8°, 0°)` |
+| `localScale` | `(0.9, 0.9, 0.9)` | `(0.9, 0.9, 0.9)` |
+| `localRotation` (quat) | `(-0.3817512, 0.06444657, 0.026694642, 0.921629)` | `(-0.3817512, -0.06444657, -0.026694642, 0.921629)` |
+
+Stored representation in the scene YAML uses Unity's `0–360°` form: `(315°, 8°, 0°)` for left and `(315°, 352°, 0°)` for right — numerically identical to the signed values above.
+
+### Why this reads as natural in headset
+
+- **-45° X pitch** rotates the mesh's local +Z (mesh forward) **back over the knuckles** rather than forward along the controller's pointer. With the Quest Touch held grip-up at lap height, this places the mitten so it appears to wrap around and over the user's fist — the silhouette reads as a hand cupping the controller from behind, not a rigid extension of it.
+- **±8° Y yaw inward** (positive for left, negative for right) angles each hand subtly toward the body's midline / the campfire. Matches how arms naturally fall when seated and looking down at a shared focal point. The magnitude is small enough that the hands don't visibly cross or converge — it just removes the "shoulder-wide aimed-outward" stiffness of zero yaw.
+- **No `localPosition` offset** — the wrist pivot stays at the tracked controller origin so the mittens move 1:1 with hand motion without any positional lag or floating-wrist artefacts.
+- **`localScale (0.9, 0.9, 0.9)` preserved** from earlier slices — slightly under-sized mittens that don't crowd the camera when hands come close to the face.
+
+### Why "pistol forward" was rejected
+
+The original `(0°, 0°, 0°)` state had the mesh's local +Z aligned with the tracked controller's pointer ray. In headset this looked like the mittens were rigid extensions of the controller body, pointing wherever the user aimed — the visual broke the "soft cozy hands" target hard. The intermediate `+45°` attempt folded the mittens down into the controller body (broken-wrist read). Only the -45° backward-curl placed the mesh behind the controller in a way that registers as a hand wrapping a grip.
+
+If a future build regresses on this — e.g. the rotation drifts back to zero through a scene-merge accident, or the mesh's authoring frame in `MittenHandsSetup` changes — the symptom in headset will be the same forward-pistol pose. Restore `localEulerAngles = (-45°, ±8°, 0°)` on both meshes; values above are exact.
 
 ## Headset validation still needed
 

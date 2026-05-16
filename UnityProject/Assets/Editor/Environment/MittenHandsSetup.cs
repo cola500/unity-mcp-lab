@@ -45,6 +45,11 @@ public static class MittenHandsSetup
         EnsureFolder("Assets/Models");
         EnsureFolder("Assets/Materials");
 
+        // thumbSide signs: confirmed in headset that +1 for left / -1 for
+        // right places the thumb on the INNER side of each mitten (toward
+        // the user's body center), which reads as natural. An earlier
+        // attempt to flip these (thinking "outward thumb" was correct) was
+        // rejected in headset validation — see docs/cozy-mittens-slice.md.
         var leftMesh  = BuildOrReplaceMesh(LeftMeshPath,  thumbSide: +1f, "LeftMittenHand");
         var rightMesh = BuildOrReplaceMesh(RightMeshPath, thumbSide: -1f, "RightMittenHand");
         var mat       = GetOrCreateMaterial();
@@ -78,8 +83,8 @@ public static class MittenHandsSetup
     }
 
     // Build a mitten from four primitives. thumbSide = +1 for left hand
-    // (thumb on +X), -1 for right hand (thumb on -X). All other geometry
-    // is symmetric.
+    // (thumb on +X = inward toward body center, the natural read), -1 for
+    // right hand (thumb on -X = also inward). All other geometry symmetric.
     private static Mesh BuildMitten(float thumbSide)
     {
         // Authored in a coordinate frame where +Z = pointing direction, +Y =
