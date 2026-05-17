@@ -51,6 +51,12 @@ Sorted newest-first with size + mtime so you can tell at a glance which APK `--i
 
 `--install-only` and `--list` don't invoke Unity at all (just adb + filesystem reads) so they're completely safe with the Editor open.
 
+### Build hook: PreloadedAssetsGuard
+
+Unity 6 + XR Plugin Management empties `PlayerSettings.preloadedAssets` during the Quest build, which would leave `ProjectSettings.asset` dirty after every build and risk shipping a future APK without the XR subsystem initialised at startup (= black 2D-rendered scene on the headset).
+
+`Assets/Editor/Build/PreloadedAssetsGuard.cs` implements `IPostprocessBuildWithReport` to re-add the two required entries (Android `XRGeneralSettings` sub-asset + `OculusSettings.asset`) and `AssetDatabase.SaveAssets()` after every build. No configuration — runs automatically on both batchmode and Editor-driven builds. Look for `[PreloadedAssetsGuard] post-build: restored …` in the build log; if you ever see `git status` flag `ProjectSettings.asset` as dirty after a build, that hook is missing or didn't execute.
+
 ## 1. Decide the version tag
 
 Open [CHANGELOG.md](../CHANGELOG.md) and pick the next `v0.x.y-suffix` for this build.
