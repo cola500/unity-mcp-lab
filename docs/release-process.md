@@ -134,68 +134,53 @@ To deploy directly to a USB-connected Quest:
 
 ## 4. Create the friend package
 
-Use the *exact versioned APK filename* that step 3 produced — the friend's report later will reference this name, so we want it traceable:
+One command:
 
 ```sh
-# Pick the latest versioned build (most recent mtime among versioned files).
-APK=$(ls -t UnityProject/Builds/CampfireVR-v*-*.apk | head -1)
-echo "Packaging $APK"
-
-rm -rf dist/friend-test
-mkdir -p dist/friend-test
-cp "$APK"                                              dist/friend-test/
-cp docs/install-on-quest.md                            dist/friend-test/INSTALL.md
-cp docs/debug-logging.md                               dist/friend-test/DEBUG-LOGS.md
-cp CHANGELOG.md                                        dist/friend-test/CHANGELOG.md
-cp UnityProject/Assets/Resources/build-info.json       dist/friend-test/BUILD-INFO.json
+./scripts/package-friend-test.sh
 ```
 
-`BUILD-INFO.json` is the same metadata baked into the APK — handy for the friend (or future-you) to see the exact build identity without launching the headset. A short `RELEASE-NOTES.md` is one shell snippet away:
+The script reads `UnityProject/Assets/Resources/build-info.json` (step 3 wrote it), picks the APK named in that file, and produces:
+
+- `dist/friend-test/` — temporary staging folder with the unpacked contents (APK + INSTALL.md + DEBUG-LOGS.md + CHANGELOG.md + BUILD-INFO.json + generated RELEASE-NOTES.md + README.md + SHA256SUMS). The script recreates it from scratch every run. **This folder is not the release artefact — never share it directly.**
+- `dist/CampfireVR-friend-test-<version>-<YYYYMMDD-HHMM>.zip` — the release artefact. Filename pulls the version + build stamp from `BUILD-INFO.json`, so the zip name maps 1:1 to the exact APK it contains.
+- `dist/CampfireVR-friend-test-<version>-<YYYYMMDD-HHMM>.zip.sha256` — sidecar checksum of the zip, for download-integrity verification.
+
+The script enforces a few invariants without prompting:
+
+- **No silent overwrites.** If the target zip already exists (same version + stamp), the script exits 3 with `Zip already exists and is immutable — re-run with --force`. The matching APK and zip share an identity; replacing one without the other would invalidate every BUILD-INFO + SHA256 trail you've recorded so far. Use `--force` only when you're consciously re-cutting the same build (e.g. corrected README + same APK).
+- **No dirty builds by default.** If `BUILD-INFO.json` says `"gitDirty": true`, the script exits 4 with `Either rebuild from a clean tree, or pass --allow-dirty`. A dirty build can't be reproduced from the recorded commit, so bug reports against it are ambiguous. Pass `--allow-dirty` only for ad-hoc internal tests, never for shared builds.
+- **SHA256 by default.** `SHA256SUMS` inside the zip lets the tester run `shasum -a 256 -c SHA256SUMS` to confirm the APK survived the trip; the `.zip.sha256` sidecar lets them confirm the zip itself before unpacking. Skip with `--no-sha256` if you have a reason (you usually don't).
+
+For repackaging an older versioned build (e.g. the friend needs an older APK because a new one regressed), pass `--apk` explicitly:
 
 ```sh
-# Synthesise dist/friend-test/RELEASE-NOTES.md from build-info.json + CHANGELOG.
-python3 -c "
-import json, pathlib
-info = json.loads(pathlib.Path('UnityProject/Assets/Resources/build-info.json').read_text())
-dirty = ' (uncommitted changes)' if info['gitDirty'] else ''
-bullets = '\n'.join('- ' + b for b in info['changelogSummary']) or '- See CHANGELOG.md.'
-print(f'''# CampfireVR — {info[\"version\"]}
-
-**APK:** {info[\"apkName\"]}
-**Built:** {info[\"buildTime\"]}
-**Commit:** {info[\"gitCommit\"]} on {info[\"gitBranch\"]}{dirty}
-
-## What's new
-
-{bullets}
-
-See CHANGELOG.md for the full per-version history, INSTALL.md for the install
-walkthrough, and DEBUG-LOGS.md for how to send logs back if something breaks.
-''')
-" > dist/friend-test/RELEASE-NOTES.md
+./scripts/package-friend-test.sh --apk UnityProject/Builds/CampfireVR-v0.1.1-remote-fika-20260514-2138.apk
 ```
 
-Then refresh `dist/friend-test/README.md` so the version is explicit: include the actual APK filename + the CHANGELOG version tag. When the friend reports a bug, the filename they downloaded tells you exactly which build it was.
-
-`docs/debug-logging.md` (= `DEBUG-LOGS.md` in the zip) covers `scripts/pull-quest-logs.sh` for the developer side and a manual `adb pull` recipe for testers who only have Platform Tools. The pull-script is *not* something the tester runs inside their headset — it runs on the computer their Quest is plugged into, after a session, to extract the JSONL logs for sending back.
-
-Then write a short `dist/friend-test/README.md` (or copy + tweak the previous one) that:
-
-- Names the version: "This is `v0.1.3-suffix` — see CHANGELOG.md for what's new."
-- Quick install path (drag APK onto MQDH, or `adb install -r`).
-- Reminder: room A by default, Internet mode, headphones.
-- Reminder: send logs back if something breaks (`adb pull` recipe).
-
-Zip it:
-
-```sh
-cd dist
-zip -r CampfireVR-friend-test-v0.1.3-suffix.zip friend-test/
-```
-
-(Zip filename uses the version tag, since this artefact is what gets shared and labelled.)
+This still uses the current `BUILD-INFO.json` for metadata — so make sure to also keep around (or regenerate from a commit checkout) the matching build-info if you want the RELEASE-NOTES + git stamp to match what the tester is actually running.
 
 `dist/` is gitignored — none of this is committed.
+
+### Artefact policy at a glance
+
+| Path | Immutable? | What to share |
+|---|---|---|
+| `UnityProject/Builds/CampfireVR-v<ver>-<stamp>.apk` | **Yes** — written once, never overwritten. | Standalone if a friend just wants the APK (rare; the zip is the usual unit). |
+| `UnityProject/Builds/CampfireVR-latest.apk` | **No** — overwritten on every build. | Never. It's a convenience pointer for `--install-only`. |
+| `dist/friend-test/` | **No** — recreated every package run. | Never. Staging only. |
+| `dist/CampfireVR-friend-test-<ver>-<stamp>.zip` | **Yes** — script refuses to overwrite without `--force`. | Yes. This is the release artefact. |
+| `dist/...zip.sha256` | **Yes** — derived from the zip. | Optional — useful for testers who care about download integrity. |
+
+### How to identify what a tester installed
+
+When a bug report comes in, three places agree on the build identity:
+
+1. The **zip filename** they downloaded — `CampfireVR-friend-test-v<ver>-<stamp>.zip` — encodes version + build minute.
+2. The **APK filename** inside the zip — `CampfireVR-v<ver>-<stamp>.apk` — same stamp.
+3. The **`build-info` event** in their `debug-logs/*.jsonl` — same fields again, plus the git commit SHA. `DebugLogger` reads `Assets/Resources/build-info.json` at app startup.
+
+Any one of those three is enough to `git checkout` the exact source tree the tester is running. The SHA256SUMS file lets you confirm bit-for-bit that the APK they have matches the APK you packaged.
 
 ## 5. Commit the changelog update
 
